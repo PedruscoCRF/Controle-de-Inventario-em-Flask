@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro - Controle de Inventário</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+
+    <div class="container mt-5">
+        <h1 class="text-center">Cadastrar Novo Item</h1>
+
+        <!-- Exibindo feedback com JavaScript -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div id="alert-message-container">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Formulário de Cadastro -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="card-title">Preencha os dados do item</h5>
+
+                <form method="POST" action="/cadastro">
+                    <div class="mb-3">
+                        <label for="patrimonio" class="form-label">Patrimônio</label>
+                        <input type="text" class="form-control" id="patrimonio" name="patrimonio" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="nome" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="nome" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="serial_number" class="form-label">Serial Number</label>
+                        <input type="text" class="form-control" id="serial_number" name="serial_number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="andar" class="form-label">Andar</label>
+                        <input type="text" class="form-control" id="andar" name="andar" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_item" class="form-label">ID</label>
+                        <input type="text" class="form-control" id="id_item" name="id_item" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="alocacao" class="form-label">Alocação</label>
+                        <input type="text" class="form-control" id="alocacao" name="alocacao" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Cadastrar</button>
+                </form>
+            </div>
+        </div>
+
+        <a href="/" class="btn btn-link mt-3">Voltar para a Home</a>
+    </div>
+
+    <script>
+        // Verificar permissão para notificações
+        if (Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+
+        // Função para mostrar a notificação
+        function showNotification(message, title = "Controle de Inventário") {
+            if (Notification.permission === "granted") {
+                new Notification(title, {
+                    body: message,
+                    icon: '/static/img/icon.png', // Você pode adicionar um ícone aqui
+                });
+            }
+        }
+
+        // Exibir notificações após o cadastro
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    {% if category == 'success' %}
+                        // Se for uma mensagem de sucesso, mostramos a notificação
+                        showNotification("{{ message }}");
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </script>
+
+</body>
+</html>
