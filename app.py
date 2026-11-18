@@ -53,6 +53,19 @@ COLUNAS_EXPORT = {
     "alocacao": "Alocação",
 }
 
+# Chave usada na URL -> (coluna no banco, rótulo)
+ORDENACAO = {
+    "patrimonio": ("patrimonio", "Patrimônio"),
+    "nome": ("nome", "Nome"),
+    "serial": ("serial_number", "Serial"),
+    "andar": ("andar", "Andar"),
+    "item": ("id_item", "ID do item"),
+    "alocacao": ("alocacao", "Alocação"),
+}
+
+POR_PAGINA = 10
+STATUS_VALIDOS = ("ativos", "removidos", "todos")
+
 CATEGORIAS_ALERTA = {"success", "danger", "warning", "info"}
 
 
@@ -194,33 +207,230 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/consulta")
     def consulta():
         criterio = request.args.get("criterio", "").strip()
-        db = get_db()
+        status = request.args.get("status", "ativos")
+        if status not in STATUS_VALIDOS:
+            status = "ativos"
+        andar = request.args.get("andar", "").strip()
+        alocacao = request.args.get("alocacao", "").strip()
+        ordem = request.args.get("ordem", "nome")
+        if ordem not in ORDENACAO:
+            ordem = "nome"
+        direcao = request.args.get("direcao", "asc")
+        if direcao not in ("asc", "desc"):
+            direcao = "asc"
+        try:
+            pagina_pedida = int(request.args.get("pagina", 1))
+        except (TypeError, ValueError):
+            pagina_pedida = 1
+        pagina_pedida = max(pagina_pedida, 1)
+
+        condicoes: list[str] = []
+        parametros: list[str] = []
+
+        if status == "ativos":
+            condicoes.append("oculto = 0")
+        elif status == "removidos":
+            condicoes.append("oculto = 1")
 
         if criterio:
             like = f"%{criterio}%"
-            inventario = db.execute(
-                """
-                SELECT * FROM inventario
-                WHERE oculto = 0 AND (
-                    patrimonio LIKE ? OR nome LIKE ? OR serial_number LIKE ?
-                    OR andar LIKE ? OR id_item LIKE ? OR alocacao LIKE ?
+            condicoes.append(
+                "(patrimonio LIKE ? OR nome LIKE ? OR serial_number LIKE ? "
+                "OR andar LIKE ? OR id_item LIKE ? OR alocacao LIKE ?)"
+            )
+            parametros.extend([like] * 6)
+
+        if andar:
+            condicoes.append("andar = ?")
+            parametros.append(andar)
+
+        if alocacao:
+            condicoes.append("alocacao = ?")
+            parametros.append(alocacao)
+
+        onde = (" WHERE " + " AND ".join(condicoes)) if condicoes else ""
+        db = get_db()
+
+        total = db.execute(
+            f"SELECT COUNT(*) FROM inventario{onde}", parametros
+        ).fetchone()[0]
+        total_paginas = max((total + POR_PAGINA - 1) // POR_PAGINA, 1)
+
+        if pagina_pedida > total_paginas:
+            return redirect(
+                url_for(
+                    "consulta",
+                    criterio=criterio,
+                    status=status,
+                    andar=andar,
+                    alocacao=alocacao,
+                    ordem=ordem,
+                    direcao=direcao,
+                    pagina=total_paginas,
                 )
-                ORDER BY nome COLLATE NOCASE
-                """,
-                (like,) * 6,
-            ).fetchall()
-        else:
-            inventario = db.execute(
-                """
-                SELECT * FROM inventario
-                WHERE oculto = 0
-                ORDER BY nome COLLATE NOCASE
-                """
-            ).fetchall()
+            )
+
+        pagina = pagina_pedida
+        deslocamento = (pagina - 1) * POR_PAGINA
+        coluna, _rotulo = ORDENACAO[ordem]
+        sentido = "DESC" if direcao == "desc" else "ASC"
+
+        inventario = db.execute(
+            f"""
+            SELECT * FROM inventario{onde}
+            ORDER BY {coluna} COLLATE NOCASE {sentido}, id {sentido}
+            LIMIT ? OFFSET ?
+            """,
+            [*parametros, POR_PAGINA, deslocamento],
+        ).fetchall()
+
+        andares = [
+            linha[0]
+            for linha in db.execute(
+                "SELECT DISTINCT andar FROM inventario "
+                "WHERE andar <> '' ORDER BY andar COLLATE NOCASE"
+            )
+        ]
+        alocacoes = [
+            linha[0]
+            for linha in db.execute(
+                "SELECT DISTINCT alocacao FROM inventario "
+                "WHERE alocacao <> '' ORDER BY alocacao COLLATE NOCASE"
+            )
+        ]
+        contagens = {
+            "ativos": db.execute(
+                "SELECT COUNT(*) FROM inventario WHERE oculto = 0"
+            ).fetchone()[0],
+            "removidos": db.execute(
+                "SELECT COUNT(*) FROM inventario WHERE oculto = 1"
+            ).fetchone()[0],
+        }
+
+        def url_consulta(**extra) -> str:
+            valores = {
+                "criterio": criterio,
+                "status": status,
+                "andar": andar,
+                "alocacao": alocacao,
+                "ordem": ordem,
+                "direcao": direcao,
+                "pagina": pagina,
+            }
+            valores.update(extra)
+
+            def manter(chave: str, valor) -> bool:
+                if valor in ("", None):
+                    return False
+                if chave == "status" and valor == "ativos":
+                    return False
+                if chave == "ordem" and valor == "nome":
+                    return False
+                if chave == "direcao" and valor == "asc":
+                    return False
+                if chave == "pagina" and valor == 1:
+                    return False
+                return True
+
+            return url_for(
+                "consulta",
+                **{
+                    chave: valor
+                    for chave, valor in valores.items()
+                    if manter(chave, valor)
+                },
+            )
+
+        inicio = max(1, pagina - 2)
+        fim = min(total_paginas, pagina + 2)
 
         return render_template(
-            "consulta.html", inventario=inventario, criterio=criterio
+            "consulta.html",
+            inventario=inventario,
+            criterio=criterio,
+            status=status,
+            andar=andar,
+            alocacao=alocacao,
+            ordem=ordem,
+            direcao=direcao,
+            pagina=pagina,
+            total=total,
+            total_paginas=total_paginas,
+            paginas=list(range(inicio, fim + 1)),
+            inicio_registro=(deslocamento + 1) if total else 0,
+            fim_registro=min(deslocamento + POR_PAGINA, total),
+            andares=andares,
+            alocacoes=alocacoes,
+            contagens=contagens,
+            opcoes_ordem=ORDENACAO,
+            url_consulta=url_consulta,
         )
+
+    @app.route("/editar/<int:id>", methods=["GET", "POST"])
+    def editar(id: int):
+        db = get_db()
+        item = db.execute("SELECT * FROM inventario WHERE id = ?", (id,)).fetchone()
+
+        if item is None:
+            flash("Item não encontrado.", "warning")
+            return redirect(url_for("consulta"))
+
+        form = {nome: item[nome] for nome, _ in CAMPOS}
+
+        if request.method == "POST":
+            form = {
+                nome: request.form.get(nome, "").strip() for nome, _ in CAMPOS
+            }
+            faltando = [rotulo for nome, rotulo in CAMPOS if not form[nome]]
+
+            if faltando:
+                flash(
+                    "Preencha os campos obrigatórios: " + ", ".join(faltando) + ".",
+                    "danger",
+                )
+                return (
+                    render_template(
+                        "editar.html", form=form, campos=CAMPOS, item=item
+                    ),
+                    400,
+                )
+
+            db.execute(
+                """
+                UPDATE inventario
+                SET patrimonio = ?, nome = ?, serial_number = ?,
+                    andar = ?, id_item = ?, alocacao = ?
+                WHERE id = ?
+                """,
+                (*[form[nome] for nome, _ in CAMPOS], id),
+            )
+            db.commit()
+
+            flash(f'Item "{form["nome"]}" atualizado com sucesso!', "success")
+            return redirect(
+                url_for(
+                    "consulta",
+                    status="removidos" if item["oculto"] else "ativos",
+                )
+            )
+
+        return render_template("editar.html", form=form, campos=CAMPOS, item=item)
+
+    @app.post("/restaurar/<int:id>")
+    def restaurar(id: int):
+        db = get_db()
+        item = db.execute(
+            "SELECT nome FROM inventario WHERE id = ? AND oculto = 1", (id,)
+        ).fetchone()
+
+        if item is None:
+            flash("Item não encontrado ou já está ativo.", "warning")
+        else:
+            db.execute("UPDATE inventario SET oculto = 0 WHERE id = ?", (id,))
+            db.commit()
+            flash(f'Item "{item["nome"]}" restaurado no inventário.', "success")
+
+        return redirect(url_for("consulta", status="removidos"))
 
     @app.get("/exportar_excel")
     def exportar_excel():

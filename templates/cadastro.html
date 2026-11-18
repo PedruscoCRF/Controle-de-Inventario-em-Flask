@@ -10,30 +10,9 @@
 
         <div class="card shadow-sm">
             <div class="card-body p-4">
-                <form method="post" action="{{ url_for('cadastro') }}">
-                    <div class="row g-3">
-                        {% for nome, rotulo in campos %}
-                            <div class="col-md-6">
-                                <label class="form-label" for="{{ nome }}">{{ rotulo }} *</label>
-                                <input
-                                    class="form-control"
-                                    type="text"
-                                    id="{{ nome }}"
-                                    name="{{ nome }}"
-                                    value="{{ form[nome] }}"
-                                    maxlength="120"
-                                    autocomplete="off"
-                                    required
-                                >
-                            </div>
-                        {% endfor %}
-                    </div>
-
-                    <div class="d-flex flex-wrap gap-2 mt-4">
-                        <button class="btn btn-primary" type="submit">Cadastrar</button>
-                        <a class="btn btn-outline-dark" href="{{ url_for('consulta') }}">Cancelar</a>
-                    </div>
-                </form>
+                {% with acao = url_for('cadastro'), rotulo_botao = 'Cadastrar', cancelar_url = url_for('consulta') %}
+                    {% include "_form_item.html" %}
+                {% endwith %}
             </div>
         </div>
     </div>

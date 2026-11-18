@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Editar item | Controle de Inventário{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8 col-xl-7">
+        <h1 class="h3 mb-1">Editar item</h1>
+        <p class="text-body-secondary mb-4">
+            {{ item.nome }}
+            &middot; Patrimônio {{ item.patrimonio }}
+            {% if item.oculto %}
+                <span class="badge text-bg-secondary ms-1">Removido</span>
+            {% else %}
+                <span class="badge text-bg-success ms-1">Ativo</span>
+            {% endif %}
+        </p>
+
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                {% with acao = url_for('editar', id=item.id), rotulo_botao = 'Salvar alterações', cancelar_url = url_for('consulta') %}
+                    {% include "_form_item.html" %}
+                {% endwith %}
+            </div>
+
+            <div class="card-footer bg-transparent d-flex flex-wrap justify-content-between align-items-center gap-2 px-4 py-3">
+                <span class="small text-body-secondary">
+                    {{ 'Este item está removido da consulta e da exportação.' if item.oculto else 'Este item está ativo no inventário.' }}
+                </span>
+
+                {% if item.oculto %}
+                    <form method="post" action="{{ url_for('restaurar', id=item.id) }}">
+                        <button class="btn btn-outline-success btn-sm" type="submit">Restaurar no inventário</button>
+                    </form>
+                {% else %}
+                    <form
+                        method="post"
+                        action="{{ url_for('remover', id=item.id) }}"
+                        data-confirmar="Remover o item {{ item.nome }} do inventário? Ele deixará de aparecer na consulta e na exportação."
+                    >
+                        <button class="btn btn-outline-danger btn-sm" type="submit">Remover do inventário</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.querySelectorAll("form[data-confirmar]").forEach(function (form) {
+        form.addEventListener("submit", function (event) {
+            if (!window.confirm(form.dataset.confirmar)) {
+                event.preventDefault();
+            }
+        });
+    });
+</script>
+{% endblock %}

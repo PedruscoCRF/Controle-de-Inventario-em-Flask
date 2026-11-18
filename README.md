@@ -29,9 +29,14 @@ python app.py
 
 - **Cadastrar** um item com patrimônio, nome, serial, andar, ID e alocação.
 - **Consultar** por qualquer um desses campos, com busca parcial.
+- **Filtrar** por andar e alocação e escolher a ordenação (coluna e direção).
+- **Navegar** pelos resultados com 10 itens por página, em tabela no computador
+  e em cartões no celular.
+- **Editar** um item já cadastrado, corrigindo qualquer um dos campos.
 - **Exportar** os itens ativos para `inventario.xlsx`.
 - **Remover** um item da consulta e da exportação (exclusão lógica: o registro
   continua no banco, marcado como oculto).
+- **Restaurar** um item removido, pela aba **Removidos** ou pela tela de edição.
 
 ## Estrutura
 
@@ -41,7 +46,11 @@ templates/
   base.html             layout, menu, mensagens e rodapé
   home.html             página inicial
   cadastro.html         formulário de cadastro
-  consulta.html         busca, tabela e exportação
+  editar.html           formulário de edição e ações de remover/restaurar
+  consulta.html         busca, filtros, tabela/cartões e paginação
+  _form_item.html       campos compartilhados por cadastro e edição
+static/
+  css/app.css           identidade visual e ajustes de acessibilidade
 tests/
   test_app.py           testes do fluxo principal
 instance/               banco e chave local (não vão para o Git)
@@ -49,6 +58,21 @@ requirements.txt        dependências de execução
 requirements-dev.txt    dependências de teste
 Procfile                comando de produção (gunicorn)
 ```
+
+## Rotas
+
+| Rota | O que faz |
+|---|---|
+| `GET /` | Página inicial com os totais |
+| `GET/POST /cadastro` | Cadastra um item |
+| `GET /consulta` | Lista os itens com busca, filtros e paginação |
+| `GET/POST /editar/<id>` | Edita um item |
+| `POST /remover/<id>` | Remove (oculta) um item |
+| `POST /restaurar/<id>` | Restaura um item removido |
+| `GET /exportar_excel` | Baixa os itens ativos em `.xlsx` |
+
+A consulta aceita os parâmetros `criterio`, `status` (`ativos` ou `removidos`),
+`andar`, `alocacao`, `ordem`, `direcao` (`asc`/`desc`) e `pagina`.
 
 ## Banco de dados
 

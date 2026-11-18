@@ -2,99 +2,267 @@
 
 {% block title %}Consultar itens | Controle de Inventário{% endblock %}
 
+{% macro acoes(item) %}
+    <div class="d-inline-flex flex-wrap gap-1">
+        <a class="btn btn-outline-dark btn-sm" href="{{ url_for('editar', id=item.id) }}">Editar</a>
+        {% if item.oculto %}
+            <form method="post" action="{{ url_for('restaurar', id=item.id) }}">
+                <button class="btn btn-outline-success btn-sm" type="submit">Restaurar</button>
+            </form>
+        {% else %}
+            <form
+                method="post"
+                action="{{ url_for('remover', id=item.id) }}"
+                data-confirmar="Remover o item {{ item.nome }} do inventário? Ele deixará de aparecer na consulta e na exportação."
+            >
+                <button class="btn btn-outline-danger btn-sm" type="submit">Remover</button>
+            </form>
+        {% endif %}
+    </div>
+{% endmacro %}
+
 {% block content %}
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
     <div>
-        <h1 class="h3 mb-1">Itens cadastrados</h1>
+        <h1 class="h3 mb-1">Inventário</h1>
         <p class="text-body-secondary mb-0">
-            {% if criterio %}
-                {{ inventario|length }} resultado(s) para “{{ criterio }}”.
-            {% else %}
-                {{ inventario|length }} item(ns) ativo(s) no inventário.
-            {% endif %}
+            {{ contagens.ativos }} item(ns) ativo(s) e {{ contagens.removidos }} removido(s).
         </p>
     </div>
-    <a class="btn btn-success" href="{{ url_for('exportar_excel') }}">Exportar para Excel</a>
+    <a class="btn btn-success" href="{{ url_for('exportar_excel') }}">Exportar ativos para Excel</a>
 </div>
+
+<ul class="nav nav-pills gap-2 mb-3" aria-label="Situação dos itens">
+    <li class="nav-item">
+        <a
+            class="nav-link {{ 'active' if status == 'ativos' }}"
+            href="{{ url_consulta(status='ativos', pagina=1) }}"
+            {% if status == 'ativos' %}aria-current="page"{% endif %}
+        >
+            Ativos <span class="badge rounded-pill badge-count">{{ contagens.ativos }}</span>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a
+            class="nav-link {{ 'active' if status == 'removidos' }}"
+            href="{{ url_consulta(status='removidos', pagina=1) }}"
+            {% if status == 'removidos' %}aria-current="page"{% endif %}
+        >
+            Removidos <span class="badge rounded-pill badge-count">{{ contagens.removidos }}</span>
+        </a>
+    </li>
+</ul>
 
 <div class="card shadow-sm mb-4">
     <div class="card-body">
-        <form class="row g-2 align-items-end" method="get" action="{{ url_for('consulta') }}">
-            <div class="col-sm">
-                <label class="form-label" for="criterio">
-                    Buscar por patrimônio, nome, serial, andar, ID ou alocação
-                </label>
+        <form class="row g-3" method="get" action="{{ url_for('consulta') }}">
+            <input type="hidden" name="status" value="{{ status }}">
+
+            <div class="col-12">
+                <label class="form-label" for="criterio">Buscar</label>
                 <input
                     class="form-control"
                     type="search"
                     id="criterio"
                     name="criterio"
                     value="{{ criterio }}"
+                    placeholder="Patrimônio, nome, serial, andar, ID ou alocação"
                     autocomplete="off"
                 >
             </div>
-            <div class="col-sm-auto d-flex gap-2">
-                <button class="btn btn-secondary" type="submit">Buscar</button>
-                {% if criterio %}
-                    <a class="btn btn-outline-dark" href="{{ url_for('consulta') }}">Limpar</a>
-                {% endif %}
+
+            <div class="col-sm-6 col-lg-3">
+                <label class="form-label" for="filtro-andar">Andar</label>
+                <select class="form-select" id="filtro-andar" name="andar">
+                    <option value="">Todos</option>
+                    {% for valor in andares %}
+                        <option value="{{ valor }}" {{ 'selected' if valor == andar }}>{{ valor }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-sm-6 col-lg-3">
+                <label class="form-label" for="filtro-alocacao">Alocação</label>
+                <select class="form-select" id="filtro-alocacao" name="alocacao">
+                    <option value="">Todas</option>
+                    {% for valor in alocacoes %}
+                        <option value="{{ valor }}" {{ 'selected' if valor == alocacao }}>{{ valor }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-sm-6 col-lg-3">
+                <label class="form-label" for="ordem">Ordenar por</label>
+                <select class="form-select" id="ordem" name="ordem">
+                    {% for chave, dados in opcoes_ordem.items() %}
+                        <option value="{{ chave }}" {{ 'selected' if chave == ordem }}>{{ dados[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-sm-6 col-lg-3">
+                <label class="form-label" for="direcao">Direção</label>
+                <select class="form-select" id="direcao" name="direcao">
+                    <option value="asc" {{ 'selected' if direcao == 'asc' }}>Crescente</option>
+                    <option value="desc" {{ 'selected' if direcao == 'desc' }}>Decrescente</option>
+                </select>
+            </div>
+
+            <div class="col-12 d-flex flex-wrap gap-2">
+                <button class="btn btn-primary" type="submit">Aplicar filtros</button>
+                <a class="btn btn-outline-dark" href="{{ url_for('consulta', status=status) }}">Limpar filtros</a>
             </div>
         </form>
     </div>
 </div>
 
+<p class="small text-body-secondary">
+    {% if total %}
+        Mostrando {{ inicio_registro }}–{{ fim_registro }} de {{ total }} item(ns)
+    {% else %}
+        Nenhum item
+    {% endif %}
+    {% if criterio %}para “{{ criterio }}”{% endif %}
+</p>
+
 {% if inventario %}
-    <div class="card shadow-sm">
+    <div class="card table-card shadow-sm d-none d-lg-block">
         <div
             class="table-responsive"
             role="region"
             aria-label="Tabela de itens do inventário"
             tabindex="0"
         >
-            <table class="table table-hover align-middle mb-0">
-                <caption class="visually-hidden">Itens ativos no inventário</caption>
-                <thead class="table-light">
+            <table class="table align-middle mb-0">
+                <caption class="visually-hidden">Itens do inventário</caption>
+                <thead>
                     <tr>
-                        <th scope="col">Patrimônio</th>
-                        <th scope="col">Nome</th>
-                        <th scope="col">Serial</th>
-                        <th scope="col">Andar</th>
-                        <th scope="col">ID do item</th>
-                        <th scope="col">Alocação</th>
+                        {% set colunas = [
+                            ('patrimonio', 'Patrimônio'),
+                            ('nome', 'Nome'),
+                            ('serial', 'Serial'),
+                            ('andar', 'Andar'),
+                            ('item', 'ID do item'),
+                            ('alocacao', 'Alocação')
+                        ] %}
+                        {% for chave, rotulo in colunas %}
+                            <th scope="col">
+                                <a
+                                    class="{{ 'is-sorted' if ordem == chave }}"
+                                    href="{{ url_consulta(ordem=chave, direcao=('desc' if ordem == chave and direcao == 'asc' else 'asc'), pagina=1) }}"
+                                >
+                                    {{ rotulo }}
+                                    {% if ordem == chave %}
+                                        <span aria-hidden="true">{{ '↑' if direcao == 'asc' else '↓' }}</span>
+                                        <span class="visually-hidden">
+                                            ({{ 'crescente' if direcao == 'asc' else 'decrescente' }})
+                                        </span>
+                                    {% endif %}
+                                </a>
+                            </th>
+                        {% endfor %}
                         <th scope="col" class="text-end">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in inventario %}
                         <tr>
-                            <td>{{ item.patrimonio }}</td>
-                            <td>{{ item.nome }}</td>
+                            <td class="fw-semibold">{{ item.patrimonio }}</td>
+                            <td>
+                                {{ item.nome }}
+                                {% if item.oculto %}
+                                    <span class="badge text-bg-secondary ms-1">Removido</span>
+                                {% endif %}
+                            </td>
                             <td>{{ item.serial_number }}</td>
                             <td>{{ item.andar }}</td>
                             <td>{{ item.id_item }}</td>
                             <td>{{ item.alocacao }}</td>
-                            <td class="text-end">
-                                <form
-                                    method="post"
-                                    action="{{ url_for('remover', id=item.id) }}"
-                                    data-confirmar="Remover o item {{ item.nome }} do inventário? Ele deixará de aparecer na consulta e na exportação."
-                                >
-                                    <button class="btn btn-outline-danger btn-sm" type="submit">Remover</button>
-                                </form>
-                            </td>
+                            <td class="text-end">{{ acoes(item) }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
+
+    <div class="d-lg-none">
+        {% for item in inventario %}
+            <article class="card item-card shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <h2 class="h5 mb-1">{{ item.nome }}</h2>
+                        {% if item.oculto %}
+                            <span class="badge text-bg-secondary">Removido</span>
+                        {% endif %}
+                    </div>
+                    <p class="text-body-secondary mb-3">Patrimônio {{ item.patrimonio }}</p>
+
+                    <dl class="row g-1 small">
+                        <dt class="col-4">Serial</dt>
+                        <dd class="col-8 mb-0">{{ item.serial_number }}</dd>
+                        <dt class="col-4">Andar</dt>
+                        <dd class="col-8 mb-0">{{ item.andar }}</dd>
+                        <dt class="col-4">ID do item</dt>
+                        <dd class="col-8 mb-0">{{ item.id_item }}</dd>
+                        <dt class="col-4">Alocação</dt>
+                        <dd class="col-8 mb-0">{{ item.alocacao }}</dd>
+                    </dl>
+
+                    <div class="mt-3">{{ acoes(item) }}</div>
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+
+    {% if total_paginas > 1 %}
+        <nav class="mt-4" aria-label="Paginação dos resultados">
+            <p class="text-center small text-body-secondary mb-2">
+                Página {{ pagina }} de {{ total_paginas }}
+            </p>
+            <ul class="pagination justify-content-center mb-0">
+                <li class="page-item {{ 'disabled' if pagina == 1 }}">
+                    {% if pagina > 1 %}
+                        <a class="page-link" href="{{ url_consulta(pagina=pagina - 1) }}">Anterior</a>
+                    {% else %}
+                        <span class="page-link">Anterior</span>
+                    {% endif %}
+                </li>
+
+                {% for numero in paginas %}
+                    <li class="page-item {{ 'active' if numero == pagina }}">
+                        <a
+                            class="page-link"
+                            href="{{ url_consulta(pagina=numero) }}"
+                            {% if numero == pagina %}aria-current="page"{% endif %}
+                        >{{ numero }}</a>
+                    </li>
+                {% endfor %}
+
+                <li class="page-item {{ 'disabled' if pagina == total_paginas }}">
+                    {% if pagina < total_paginas %}
+                        <a class="page-link" href="{{ url_consulta(pagina=pagina + 1) }}">Próxima</a>
+                    {% else %}
+                        <span class="page-link">Próxima</span>
+                    {% endif %}
+                </li>
+            </ul>
+        </nav>
+    {% endif %}
 {% else %}
-    <div class="alert alert-info" role="status">
-        Nenhum item encontrado.
-        {% if criterio %}
-            <a href="{{ url_for('consulta') }}">Limpar a busca</a>.
+    <div class="empty-state">
+        {% if status == 'removidos' %}
+            <p class="mb-2">Nenhum item removido.</p>
+            <a href="{{ url_consulta(status='ativos', pagina=1) }}">Ver itens ativos</a>
         {% else %}
-            <a href="{{ url_for('cadastro') }}">Cadastre o primeiro item</a>.
+            <p class="mb-2">Nenhum item encontrado.</p>
+            {% if criterio or andar or alocacao %}
+                <a href="{{ url_consulta(status=status, criterio='', andar='', alocacao='', pagina=1) }}">
+                    Limpar a busca e os filtros
+                </a>
+            {% else %}
+                <a href="{{ url_for('cadastro') }}">Cadastre o primeiro item</a>
+            {% endif %}
         {% endif %}
     </div>
 {% endif %}

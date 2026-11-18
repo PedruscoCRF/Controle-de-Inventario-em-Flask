@@ -172,3 +172,128 @@ def test_exportacao_vazia_funciona(client):
     planilha = load_workbook(io.BytesIO(resposta.data)).active
     assert planilha.max_row == 1
     assert planilha["A1"].value == "Patrimônio"
+
+
+def test_filtros_por_andar_e_alocacao(client):
+    cadastrar(client)
+    cadastrar(
+        client,
+        patrimonio="PAT-002",
+        nome="Projetor Epson",
+        serial_number="SN-XYZ",
+        andar="1",
+        alocacao="Salão",
+    )
+
+    texto = client.get("/consulta?andar=1").get_data(as_text=True)
+    assert "Projetor Epson" in texto
+    assert "Notebook Dell" not in texto
+
+    texto = client.get("/consulta?alocacao=Secretaria").get_data(as_text=True)
+    assert "Notebook Dell" in texto
+    assert "Projetor Epson" not in texto
+
+
+def test_editar_item_atualiza_os_dados(app, client):
+    cadastrar(client)
+    item_id = id_por_nome(app, "Notebook Dell")
+
+    pagina = client.get(f"/editar/{item_id}").get_data(as_text=True)
+    assert "Notebook Dell" in pagina
+    assert "SN-ABC123" in pagina
+
+    resposta = client.post(
+        f"/editar/{item_id}",
+        data={
+            **DADOS,
+            "nome": "Notebook Dell Latitude",
+            "andar": "3",
+            "alocacao": "Tesouraria",
+        },
+        follow_redirects=True,
+    )
+    texto = resposta.get_data(as_text=True)
+
+    assert "atualizado com sucesso" in texto
+    assert "Notebook Dell Latitude" in texto
+    assert "Tesouraria" in texto
+
+    with sqlite3.connect(app.config["DATABASE"]) as conexao:
+        linha = conexao.execute(
+            "SELECT nome, andar, alocacao FROM inventario WHERE id = ?", (item_id,)
+        ).fetchone()
+    assert linha == ("Notebook Dell Latitude", "3", "Tesouraria")
+
+
+def test_editar_exige_campos_obrigatorios(app, client):
+    cadastrar(client)
+    item_id = id_por_nome(app, "Notebook Dell")
+
+    resposta = client.post(
+        f"/editar/{item_id}",
+        data={**DADOS, "nome": ""},
+    )
+    texto = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 400
+    assert "Preencha os campos obrigatórios" in texto
+    assert "Nome" in texto
+
+
+def test_restaurar_item_removido(app, client):
+    cadastrar(client)
+    item_id = id_por_nome(app, "Notebook Dell")
+    client.post(f"/remover/{item_id}")
+
+    texto = client.get("/consulta?status=removidos").get_data(as_text=True)
+    assert "Notebook Dell" in texto
+    assert "Restaurar" in texto
+
+    resposta = client.post(f"/restaurar/{item_id}", follow_redirects=True)
+    assert "restaurado no inventário" in resposta.get_data(as_text=True)
+
+    texto = client.get("/consulta").get_data(as_text=True)
+    assert "Notebook Dell" in texto
+
+    with sqlite3.connect(app.config["DATABASE"]) as conexao:
+        oculto = conexao.execute(
+            "SELECT oculto FROM inventario WHERE id = ?", (item_id,)
+        ).fetchone()[0]
+    assert oculto == 0
+
+
+def test_lista_de_removidos_nao_mostra_ativos(client):
+    cadastrar(client)
+    texto = client.get("/consulta?status=removidos").get_data(as_text=True)
+    assert "Nenhum item removido" in texto
+    assert "Notebook Dell" not in texto
+
+
+def test_paginacao_mostra_dez_por_pagina(client):
+    for numero in range(1, 13):
+        cadastrar(
+            client,
+            patrimonio=f"PAT-{numero:03d}",
+            nome=f"Item {numero:02d}",
+            serial_number=f"SN-{numero:03d}",
+            id_item=f"ITEM-{numero:03d}",
+        )
+
+    primeira = client.get("/consulta").get_data(as_text=True)
+    assert "Mostrando 1–10 de 12 item(ns)" in primeira
+    assert "Página 1 de 2" in primeira
+
+    segunda = client.get("/consulta?pagina=2").get_data(as_text=True)
+    assert "Mostrando 11–12 de 12 item(ns)" in segunda
+    assert "Página 2 de 2" in segunda
+
+    excedente = client.get("/consulta?pagina=99", follow_redirects=True)
+    assert "Página 2 de 2" in excedente.get_data(as_text=True)
+
+
+def test_ordenacao_decrescente_por_nome(client):
+    cadastrar(client, nome="Alpha")
+    cadastrar(client, patrimonio="PAT-002", nome="Zulu", serial_number="SN-2")
+
+    texto = client.get("/consulta?ordem=nome&direcao=desc").get_data(as_text=True)
+    assert texto.index("Zulu") < texto.index("Alpha")
