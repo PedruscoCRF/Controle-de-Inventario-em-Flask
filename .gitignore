@@ -1,0 +1,19 @@
+# Ambiente virtual
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Banco local, chave de sessão e backups
+instance/
+inventario.db
+*.db-journal
+
+# Configurações locais
+.env
+
+# Planilhas geradas
+*.xlsx
