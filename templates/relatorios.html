@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% from "_icones.html" import icone %}
+
+{% block title %}Relatórios | Controle de Inventário{% endblock %}
+{% block secao %}Patrimônio / Relatórios{% endblock %}
+
+{% macro tabela_distribuicao(titulo, id_titulo, linhas, rotulo_coluna, classe_barra) %}
+    <section class="painel-card h-100" aria-labelledby="{{ id_titulo }}">
+        <div class="painel-card-topo">
+            <h2 class="painel-card-titulo" id="{{ id_titulo }}">
+                {{ icone('relatorios', 17) }} {{ titulo }}
+            </h2>
+            <span class="painel-card-nota">{{ linhas|length }} grupo(s)</span>
+        </div>
+
+        {% if linhas %}
+            <div
+                class="table-responsive"
+                aria-labelledby="{{ id_titulo }}"
+                tabindex="0"
+            >
+                <table class="table tabela-erp mb-0">
+                    <caption class="visually-hidden">{{ titulo }}</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">{{ rotulo_coluna }}</th>
+                            <th scope="col" class="text-end">Itens</th>
+                            <th scope="col" class="coluna-barra">Participação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for linha in linhas %}
+                            {% set pct = (linha.total * 100 / ativos) if ativos else 0 %}
+                            <tr>
+                                <td>{{ linha[0] }}</td>
+                                <td class="text-end texto-mono">{{ linha.total }}</td>
+                                <td>
+                                    <div class="barra-celula">
+                                        <div class="barra-trilho">
+                                            <span class="{{ classe_barra }}" style="width: {{ '%.1f'|format(pct) }}%"></span>
+                                        </div>
+                                        <span class="barra-valor">{{ '%.0f'|format(pct) }}%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="texto-vazio">Nenhum item ativo com esse campo preenchido.</p>
+        {% endif %}
+    </section>
+{% endmacro %}
+
+{% block content %}
+<div class="pagina-topo">
+    <div>
+        <p class="pagina-sobretitulo">Análises</p>
+        <h1 class="pagina-titulo">Relatórios</h1>
+        <p class="pagina-descricao">
+            Distribuição do patrimônio ativo por andar e por alocação.
+        </p>
+    </div>
+    <div class="pagina-acoes">
+        <a class="btn btn-outline-secondary" href="{{ url_for('consulta') }}">
+            {{ icone('itens', 17) }} Ver itens
+        </a>
+        <a class="btn btn-primary" href="{{ url_for('exportar_excel') }}">
+            {{ icone('download', 17) }} Exportar Excel
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3">
+        <div class="kpi">
+            <span class="kpi-icone kpi-azul">{{ icone('itens', 20) }}</span>
+            <div class="kpi-corpo">
+                <span class="kpi-rotulo">Itens ativos</span>
+                <strong class="kpi-valor">{{ ativos }}</strong>
+                <span class="kpi-nota">Base dos relatórios</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="kpi">
+            <span class="kpi-icone kpi-cinza">{{ icone('remover', 20) }}</span>
+            <div class="kpi-corpo">
+                <span class="kpi-rotulo">Removidos</span>
+                <strong class="kpi-valor">{{ removidos }}</strong>
+                <span class="kpi-nota">Fora dos totais</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="kpi">
+            <span class="kpi-icone kpi-verde">{{ icone('andar', 20) }}</span>
+            <div class="kpi-corpo">
+                <span class="kpi-rotulo">Andares</span>
+                <strong class="kpi-valor">{{ por_andar|length }}</strong>
+                <span class="kpi-nota">
+                    {{ sem_andar }} sem andar
+                </span>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="kpi">
+            <span class="kpi-icone kpi-ambar">{{ icone('alocacao', 20) }}</span>
+            <div class="kpi-corpo">
+                <span class="kpi-rotulo">Alocações</span>
+                <strong class="kpi-valor">{{ por_alocacao|length }}</strong>
+                <span class="kpi-nota">
+                    {{ sem_alocacao }} sem alocação
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-xl-6">
+        {{ tabela_distribuicao('Itens por andar', 'rel-andar', por_andar, 'Andar', 'barra-preenchimento') }}
+    </div>
+    <div class="col-xl-6">
+        {{ tabela_distribuicao('Itens por alocação', 'rel-alocacao', por_alocacao, 'Alocação', 'barra-preenchimento barra-verde') }}
+    </div>
+</div>
+
+<p class="nota-rodape">
+    Os percentuais usam os {{ ativos }} item(ns) ativo(s) como base. Itens removidos
+    e itens sem o campo preenchido não entram nas barras.
+</p>
+{% endblock %}

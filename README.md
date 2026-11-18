@@ -1,7 +1,8 @@
 # Controle de Inventário em Flask
 
-Sistema simples para cadastrar, consultar e exportar os itens do inventário.
-Feito com Flask, SQLite e Bootstrap, sem etapa de build.
+Sistema de gestão patrimonial com cara de ERP, feito com Flask, SQLite e
+Bootstrap, sem etapa de build. Tem painel com indicadores, tabela densa de
+itens, ficha com histórico de movimentações e relatórios por andar e alocação.
 
 ## Como rodar
 
@@ -27,32 +28,44 @@ python app.py
 
 ## O que dá para fazer
 
+- **Acompanhar** o painel com itens ativos, removidos, andares e alocações,
+  além das movimentações recentes e dos últimos itens cadastrados.
 - **Cadastrar** um item com patrimônio, nome, serial, andar, ID e alocação.
-- **Consultar** por qualquer um desses campos, com busca parcial.
+- **Consultar** em uma tabela densa, com busca parcial por qualquer campo.
 - **Filtrar** por andar e alocação e escolher a ordenação (coluna e direção).
 - **Navegar** pelos resultados com 10 itens por página, em tabela no computador
   e em cartões no celular.
+- **Abrir a ficha** de um item, com todos os dados e o histórico de
+  cadastro, edições, remoções e restaurações.
 - **Editar** um item já cadastrado, corrigindo qualquer um dos campos.
+- **Ver relatórios** com a distribuição dos itens ativos por andar e por
+  alocação, incluindo a participação percentual de cada grupo.
 - **Exportar** os itens ativos para `inventario.xlsx`.
 - **Remover** um item da consulta e da exportação (exclusão lógica: o registro
   continua no banco, marcado como oculto).
-- **Restaurar** um item removido, pela aba **Removidos** ou pela tela de edição.
+- **Restaurar** um item removido, pela aba **Removidos**, pela ficha ou pela
+  tela de edição.
 
 ## Estrutura
 
 ```text
-app.py                  aplicação e rotas
+app.py                  aplicação, rotas e histórico de movimentações
 templates/
-  base.html             layout, menu, mensagens e rodapé
-  home.html             página inicial
+  base.html             shell com menu lateral, topo, mensagens e rodapé
+  _sidebar.html         menu lateral reaproveitado no offcanvas do celular
+  _icones.html          ícones SVG inline usados nas telas
+  _flashes.html         mensagens de retorno
+  home.html             painel com indicadores, barras e movimentações
   login.html            tela de acesso
   erro.html             aviso de sessão expirada
   cadastro.html         formulário de cadastro
   editar.html           formulário de edição e ações de remover/restaurar
-  consulta.html         busca, filtros, tabela/cartões e paginação
+  consulta.html         tabela densa, filtros, cartões no celular e paginação
+  item.html             ficha do item com histórico
+  relatorios.html       distribuição por andar e por alocação
   _form_item.html       campos compartilhados por cadastro e edição
 static/
-  css/app.css           identidade visual e ajustes de acessibilidade
+  css/app.css           identidade visual do ERP e ajustes de acessibilidade
 tests/
   test_app.py           testes do fluxo principal
 instance/               banco e chave local (não vão para o Git)
@@ -67,9 +80,11 @@ Procfile                comando de produção (gunicorn)
 |---|---|
 | `GET /login` | Tela de acesso |
 | `POST /sair` | Encerra a sessão |
-| `GET /` | Página inicial com os totais |
+| `GET /` | Painel com indicadores e movimentações recentes |
 | `GET/POST /cadastro` | Cadastra um item |
 | `GET /consulta` | Lista os itens com busca, filtros e paginação |
+| `GET /itens/<id>` | Ficha do item com histórico de movimentações |
+| `GET /relatorios` | Distribuição dos itens ativos por andar e alocação |
 | `GET/POST /editar/<id>` | Edita um item |
 | `POST /remover/<id>` | Remove (oculta) um item |
 | `POST /restaurar/<id>` | Restaura um item removido |
@@ -94,6 +109,10 @@ O sistema é protegido por uma senha única, compartilhada pela equipe.
 ## Banco de dados
 
 - O banco fica em `instance/inventario.db` e **não é versionado**.
+- A tabela `inventario` guarda os itens, com `oculto = 1` para os removidos.
+- A tabela `movimentacoes` guarda o histórico (`item_id`, `acao`, `detalhe` e
+  `criado_em`) de cadastros, edições, remoções e restaurações. Ela é criada
+  automaticamente na primeira execução.
 - Na primeira execução, se existir um `inventario.db` antigo na raiz do
   projeto, ele é copiado automaticamente para `instance/`.
 - Para fazer backup, pare a aplicação e copie o arquivo

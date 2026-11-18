@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% from "_icones.html" import icone %}
+
+{% block title %}{{ item.nome }} | Controle de Inventário{% endblock %}
+{% block secao %}Patrimônio / Ficha do item{% endblock %}
+
+{% block content %}
+<div class="pagina-topo">
+    <div>
+        <p class="pagina-sobretitulo">Patrimônio {{ item.patrimonio }}</p>
+        <div class="pagina-titulo-linha">
+            <h1 class="pagina-titulo">{{ item.nome }}</h1>
+            {% if item.oculto %}
+                <span class="selo selo-cinza">Removido</span>
+            {% else %}
+                <span class="selo selo-verde">Ativo</span>
+            {% endif %}
+        </div>
+        <p class="pagina-descricao">
+            {{ item.alocacao }} &middot; Andar {{ item.andar }}
+        </p>
+    </div>
+    <div class="pagina-acoes">
+        <a class="btn btn-outline-secondary" href="{{ url_for('consulta') }}">
+            {{ icone('esquerda', 16) }} Voltar
+        </a>
+        <a class="btn btn-primary" href="{{ url_for('editar', id=item.id) }}">
+            {{ icone('editar', 16) }} Editar
+        </a>
+        {% if item.oculto %}
+            <form method="post" action="{{ url_for('restaurar', id=item.id) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-outline-success" type="submit">
+                    {{ icone('restaurar', 16) }} Restaurar
+                </button>
+            </form>
+        {% else %}
+            <form
+                method="post"
+                action="{{ url_for('remover', id=item.id) }}"
+                data-confirmar="Remover o item {{ item.nome }} do inventário? Ele deixará de aparecer na consulta e na exportação."
+            >
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-outline-danger" type="submit">
+                    {{ icone('remover', 16) }} Remover
+                </button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+
+{% if item.oculto %}
+    <div class="aviso aviso-ambar">
+        <span class="aviso-icone">{{ icone('alerta', 18) }}</span>
+        <div>
+            <strong>Item removido do inventário.</strong>
+            Ele não aparece na consulta de ativos nem na exportação, mas continua
+            no banco e pode ser restaurado a qualquer momento.
+        </div>
+    </div>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <section class="painel-card" aria-labelledby="titulo-dados">
+            <div class="painel-card-topo">
+                <h2 class="painel-card-titulo" id="titulo-dados">
+                    {{ icone('total', 17) }} Dados do item
+                </h2>
+            </div>
+
+            <dl class="ficha-dados">
+                <div>
+                    <dt>Patrimônio</dt>
+                    <dd class="texto-mono">{{ item.patrimonio }}</dd>
+                </div>
+                <div>
+                    <dt>Serial Number</dt>
+                    <dd class="texto-mono">{{ item.serial_number }}</dd>
+                </div>
+                <div class="ficha-larga">
+                    <dt>Nome</dt>
+                    <dd>{{ item.nome }}</dd>
+                </div>
+                <div>
+                    <dt>ID do item</dt>
+                    <dd class="texto-mono">{{ item.id_item }}</dd>
+                </div>
+                <div>
+                    <dt>Andar</dt>
+                    <dd>{{ item.andar }}</dd>
+                </div>
+                <div>
+                    <dt>Alocação</dt>
+                    <dd>{{ item.alocacao }}</dd>
+                </div>
+                <div>
+                    <dt>Situação</dt>
+                    <dd>
+                        {% if item.oculto %}
+                            <span class="selo selo-cinza">Removido</span>
+                        {% else %}
+                            <span class="selo selo-verde">Ativo</span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </section>
+    </div>
+
+    <div class="col-lg-5">
+        <section class="painel-card h-100" aria-labelledby="titulo-historico">
+            <div class="painel-card-topo">
+                <h2 class="painel-card-titulo" id="titulo-historico">
+                    {{ icone('historico', 17) }} Histórico
+                </h2>
+                <span class="painel-card-nota">{{ historico|length }} registro(s)</span>
+            </div>
+
+            {% if historico %}
+                <ol class="timeline timeline-compacta">
+                    {% for mov in historico %}
+                        {% set dados = acoes.get(mov.acao, ('Movimento', 'info')) %}
+                        <li class="timeline-item">
+                            <span class="timeline-ponto timeline-{{ dados[1] }}" aria-hidden="true"></span>
+                            <div class="timeline-corpo">
+                                <div class="timeline-topo">
+                                    <span class="selo selo-{{ dados[1] }}">{{ dados[0] }}</span>
+                                    <time datetime="{{ mov.criado_em }}">{{ mov.criado_em|data_hora }}</time>
+                                </div>
+                                {% if mov.detalhe %}
+                                    <p class="timeline-detalhe">{{ mov.detalhe }}</p>
+                                {% endif %}
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ol>
+            {% else %}
+                <div class="vazio-compacto">
+                    <p class="mb-1">Nenhuma movimentação registrada.</p>
+                    <p class="mb-0 small texto-secundario">
+                        As próximas edições, remoções e restaurações aparecem aqui.
+                    </p>
+                </div>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.querySelectorAll("form[data-confirmar]").forEach(function (form) {
+        form.addEventListener("submit", function (event) {
+            if (!window.confirm(form.dataset.confirmar)) {
+                event.preventDefault();
+            }
+        });
+    });
+</script>
+{% endblock %}

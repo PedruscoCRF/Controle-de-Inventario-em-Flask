@@ -1,42 +1,215 @@
 {% extends "base.html" %}
+{% from "_icones.html" import icone %}
 
-{% block title %}Início | Controle de Inventário{% endblock %}
+{% block title %}Painel | Controle de Inventário{% endblock %}
+{% block secao %}Painel{% endblock %}
 
 {% block content %}
-<div class="row align-items-center g-4">
-    <div class="col-lg-7">
-        <h1 class="display-6 fw-semibold">Bem-vindo ao Controle de Inventário</h1>
-        <p class="lead text-body-secondary">
-            Cadastre, consulte e exporte os itens da igreja em um só lugar.
-        </p>
-        <div class="d-flex flex-wrap gap-2">
-            <a class="btn btn-primary" href="{{ url_for('cadastro') }}">Cadastrar item</a>
-            <a class="btn btn-outline-dark" href="{{ url_for('consulta') }}">Consultar itens</a>
+<div class="pagina-topo">
+    <div>
+        <p class="pagina-sobretitulo">Visão geral</p>
+        <h1 class="pagina-titulo">Painel</h1>
+        <p class="pagina-descricao">Resumo do patrimônio e das últimas movimentações.</p>
+    </div>
+    <div class="pagina-acoes">
+        <a class="btn btn-primary" href="{{ url_for('cadastro') }}">
+            {{ icone('novo', 17) }} Novo item
+        </a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('relatorios') }}">
+            {{ icone('relatorios', 17) }} Relatórios
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3">
+        <div class="kpi">
+            <span class="kpi-icone kpi-azul">{{ icone('itens', 20) }}</span>
+            <div class="kpi-corpo">
+                <span class="kpi-rotulo">Itens ativos</span>
+                <strong class="kpi-valor">{{ contagens.ativos }}</strong>
+                <span class="kpi-nota">Na consulta e exportação</span>
+            </div>
         </div>
     </div>
-
-    <div class="col-lg-5">
-        <div class="row g-3">
-            <div class="col-6">
-                <div class="card h-100 shadow-sm">
-                    <div class="card-body">
-                        <p class="text-body-secondary small mb-1">Itens ativos</p>
-                        <p class="display-6 mb-0">{{ total }}</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6">
-                <div class="card h-100 shadow-sm">
-                    <div class="card-body">
-                        <p class="text-body-secondary small mb-1">Itens removidos</p>
-                        <p class="display-6 mb-0">{{ ocultos }}</p>
-                    </div>
-                </div>
+    <div class="col-6 col-xl-3">
+        <div class="kpi">
+            <span class="kpi-icone kpi-cinza">{{ icone('remover', 20) }}</span>
+            <div class="kpi-corpo">
+                <span class="kpi-rotulo">Removidos</span>
+                <strong class="kpi-valor">{{ contagens.removidos }}</strong>
+                <span class="kpi-nota">Podem ser restaurados</span>
             </div>
         </div>
-        <p class="text-body-secondary small mt-3 mb-0">
-            Itens removidos ficam ocultos da consulta e da exportação, mas não são apagados do banco.
-        </p>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="kpi">
+            <span class="kpi-icone kpi-verde">{{ icone('andar', 20) }}</span>
+            <div class="kpi-corpo">
+                <span class="kpi-rotulo">Andares</span>
+                <strong class="kpi-valor">{{ andares_total }}</strong>
+                <span class="kpi-nota">Com itens ativos</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="kpi">
+            <span class="kpi-icone kpi-ambar">{{ icone('alocacao', 20) }}</span>
+            <div class="kpi-corpo">
+                <span class="kpi-rotulo">Alocações</span>
+                <strong class="kpi-valor">{{ alocacoes_total }}</strong>
+                <span class="kpi-nota">Setores cadastrados</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-xl-7">
+        <section class="painel-card" aria-labelledby="titulo-movimentacoes">
+            <div class="painel-card-topo">
+                <h2 class="painel-card-titulo" id="titulo-movimentacoes">
+                    {{ icone('historico', 17) }} Movimentações recentes
+                </h2>
+                <a class="link-acao" href="{{ url_for('consulta') }}">Ver itens</a>
+            </div>
+
+            {% if movimentacoes %}
+                <ol class="timeline">
+                    {% for mov in movimentacoes %}
+                        {% set dados = acoes.get(mov.acao, ('Movimento', 'info')) %}
+                        <li class="timeline-item">
+                            <span class="timeline-ponto timeline-{{ dados[1] }}" aria-hidden="true"></span>
+                            <div class="timeline-corpo">
+                                <div class="timeline-topo">
+                                    <span class="selo selo-{{ dados[1] }}">{{ dados[0] }}</span>
+                                    <a href="{{ url_for('ficha_item', id=mov.item_id) }}">
+                                        {{ mov.nome or 'Item não encontrado' }}
+                                    </a>
+                                    <time datetime="{{ mov.criado_em }}">{{ mov.criado_em|data_hora }}</time>
+                                </div>
+                                {% if mov.detalhe %}
+                                    <p class="timeline-detalhe">{{ mov.detalhe }}</p>
+                                {% endif %}
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ol>
+            {% else %}
+                <div class="vazio-compacto">
+                    <p class="mb-1">Nenhuma movimentação registrada.</p>
+                    <a href="{{ url_for('cadastro') }}">Cadastre o primeiro item</a>
+                </div>
+            {% endif %}
+        </section>
+
+        <section class="painel-card mt-3" aria-labelledby="titulo-ultimos">
+            <div class="painel-card-topo">
+                <h2 class="painel-card-titulo" id="titulo-ultimos">
+                    {{ icone('itens', 17) }} Últimos itens cadastrados
+                </h2>
+                <a class="link-acao" href="{{ url_for('consulta', ordem='nome', direcao='desc') }}">
+                    Ver todos
+                </a>
+            </div>
+
+            {% if ultimos_itens %}
+                <div class="table-responsive">
+                    <table class="table tabela-erp mb-0">
+                        <caption class="visually-hidden">Últimos itens cadastrados</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Item</th>
+                                <th scope="col">Patrimônio</th>
+                                <th scope="col" class="d-none d-sm-table-cell">Andar</th>
+                                <th scope="col" class="text-end">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in ultimos_itens %}
+                                <tr>
+                                    <td>
+                                        <a class="link-forte" href="{{ url_for('ficha_item', id=item.id) }}">
+                                            {{ item.nome }}
+                                        </a>
+                                    </td>
+                                    <td class="texto-mono">{{ item.patrimonio }}</td>
+                                    <td class="d-none d-sm-table-cell">{{ item.andar }}</td>
+                                    <td class="text-end">
+                                        <a
+                                            class="btn-icone"
+                                            href="{{ url_for('editar', id=item.id) }}"
+                                            aria-label="Editar {{ item.nome }}"
+                                        >{{ icone('editar', 16) }}</a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="vazio-compacto">
+                    <p class="mb-1">Nenhum item ativo.</p>
+                    <a href="{{ url_for('cadastro') }}">Cadastrar item</a>
+                </div>
+            {% endif %}
+        </section>
+    </div>
+
+    <div class="col-xl-5">
+        <section class="painel-card" aria-labelledby="titulo-andares">
+            <div class="painel-card-topo">
+                <h2 class="painel-card-titulo" id="titulo-andares">
+                    {{ icone('andar', 17) }} Itens por andar
+                </h2>
+            </div>
+
+            {% if por_andar %}
+                <ul class="barras">
+                    {% for linha in por_andar %}
+                        {% set pct = (linha.total * 100 / contagens.ativos) if contagens.ativos else 0 %}
+                        <li class="barra-item">
+                            <div class="barra-topo">
+                                <span>{{ linha.andar }}</span>
+                                <strong>{{ linha.total }}</strong>
+                            </div>
+                            <div class="barra-trilho">
+                                <span class="barra-preenchimento" style="width: {{ '%.1f'|format(pct) }}%"></span>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="texto-vazio">Nenhum andar informado.</p>
+            {% endif %}
+        </section>
+
+        <section class="painel-card mt-3" aria-labelledby="titulo-alocacoes">
+            <div class="painel-card-topo">
+                <h2 class="painel-card-titulo" id="titulo-alocacoes">
+                    {{ icone('alocacao', 17) }} Itens por alocação
+                </h2>
+            </div>
+
+            {% if por_alocacao %}
+                <ul class="barras">
+                    {% for linha in por_alocacao %}
+                        {% set pct = (linha.total * 100 / contagens.ativos) if contagens.ativos else 0 %}
+                        <li class="barra-item">
+                            <div class="barra-topo">
+                                <span>{{ linha.alocacao }}</span>
+                                <strong>{{ linha.total }}</strong>
+                            </div>
+                            <div class="barra-trilho">
+                                <span class="barra-preenchimento barra-verde" style="width: {{ '%.1f'|format(pct) }}%"></span>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="texto-vazio">Nenhuma alocação informada.</p>
+            {% endif %}
+        </section>
     </div>
 </div>
 {% endblock %}

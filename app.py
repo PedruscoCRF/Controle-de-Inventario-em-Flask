@@ -16,7 +16,7 @@ import secrets
 import shutil
 import sqlite3
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -68,6 +68,14 @@ ORDENACAO = {
 
 POR_PAGINA = 10
 STATUS_VALIDOS = ("ativos", "removidos", "todos")
+
+# Ação registrada no histórico -> (rótulo, classe do selo)
+ACOES = {
+    "cadastro": ("Cadastro", "success"),
+    "edicao": ("Edição", "info"),
+    "remocao": ("Remoção", "danger"),
+    "restauracao": ("Restauração", "warning"),
+}
 
 CATEGORIAS_ALERTA = {"success", "danger", "warning", "info"}
 
@@ -132,6 +140,21 @@ def _preparar_banco(app: Flask) -> None:
     conexao.execute(
         "CREATE INDEX IF NOT EXISTS idx_inventario_nome ON inventario(nome)"
     )
+    conexao.execute(
+        """
+        CREATE TABLE IF NOT EXISTS movimentacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id INTEGER NOT NULL,
+            acao TEXT NOT NULL,
+            detalhe TEXT NOT NULL DEFAULT '',
+            criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )
+        """
+    )
+    conexao.execute(
+        "CREATE INDEX IF NOT EXISTS idx_movimentacoes_item "
+        "ON movimentacoes(item_id, id DESC)"
+    )
     conexao.commit()
     conexao.close()
 
@@ -182,10 +205,19 @@ def create_app(test_config: dict | None = None) -> Flask:
         if db is not None:
             db.close()
 
+    def registrar_movimentacao(
+        db: sqlite3.Connection, item_id: int, acao: str, detalhe: str = ""
+    ) -> None:
+        db.execute(
+            "INSERT INTO movimentacoes (item_id, acao, detalhe) VALUES (?, ?, ?)",
+            (item_id, acao, detalhe),
+        )
+
     @app.context_processor
     def variaveis_globais() -> dict:
         return {
             "current_year": date.today().year,
+            "hoje": date.today().strftime("%d/%m/%Y"),
             "autenticado": bool(session.get("autenticado")),
         }
 
@@ -200,6 +232,19 @@ def create_app(test_config: dict | None = None) -> Flask:
         return token
 
     app.jinja_env.globals["csrf_token"] = csrf_token
+
+    def data_hora(valor: str | None) -> str:
+        """Converte o timestamp do banco em data legível, sem alterar o padrão."""
+        if not valor:
+            return ""
+        try:
+            return datetime.strptime(valor, "%Y-%m-%d %H:%M:%S").strftime(
+                "%d/%m/%Y %H:%M"
+            )
+        except ValueError:
+            return valor
+
+    app.jinja_env.filters["data_hora"] = data_hora
 
     def destino_seguro(destino: str | None) -> str:
         """Aceita apenas caminhos internos, para evitar redirecionamento aberto."""
@@ -313,13 +358,139 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/")
     def index():
         db = get_db()
-        total = db.execute(
+        contagens = {
+            "ativos": db.execute(
+                "SELECT COUNT(*) FROM inventario WHERE oculto = 0"
+            ).fetchone()[0],
+            "removidos": db.execute(
+                "SELECT COUNT(*) FROM inventario WHERE oculto = 1"
+            ).fetchone()[0],
+        }
+        andares_total = db.execute(
+            "SELECT COUNT(DISTINCT andar) FROM inventario "
+            "WHERE oculto = 0 AND andar <> ''"
+        ).fetchone()[0]
+        alocacoes_total = db.execute(
+            "SELECT COUNT(DISTINCT alocacao) FROM inventario "
+            "WHERE oculto = 0 AND alocacao <> ''"
+        ).fetchone()[0]
+
+        por_andar = db.execute(
+            """
+            SELECT andar, COUNT(*) AS total
+            FROM inventario
+            WHERE oculto = 0 AND andar <> ''
+            GROUP BY andar
+            ORDER BY total DESC, andar COLLATE NOCASE
+            LIMIT 6
+            """
+        ).fetchall()
+        por_alocacao = db.execute(
+            """
+            SELECT alocacao, COUNT(*) AS total
+            FROM inventario
+            WHERE oculto = 0 AND alocacao <> ''
+            GROUP BY alocacao
+            ORDER BY total DESC, alocacao COLLATE NOCASE
+            LIMIT 6
+            """
+        ).fetchall()
+
+        ultimos_itens = db.execute(
+            "SELECT * FROM inventario WHERE oculto = 0 ORDER BY id DESC LIMIT 5"
+        ).fetchall()
+
+        movimentacoes = db.execute(
+            """
+            SELECT m.id, m.item_id, m.acao, m.detalhe, m.criado_em,
+                   i.nome, i.patrimonio, i.oculto
+            FROM movimentacoes AS m
+            LEFT JOIN inventario AS i ON i.id = m.item_id
+            ORDER BY m.id DESC
+            LIMIT 8
+            """
+        ).fetchall()
+
+        return render_template(
+            "home.html",
+            contagens=contagens,
+            andares_total=andares_total,
+            alocacoes_total=alocacoes_total,
+            por_andar=por_andar,
+            por_alocacao=por_alocacao,
+            ultimos_itens=ultimos_itens,
+            movimentacoes=movimentacoes,
+            acoes=ACOES,
+        )
+
+    @app.get("/itens/<int:id>")
+    def ficha_item(id: int):
+        db = get_db()
+        item = db.execute("SELECT * FROM inventario WHERE id = ?", (id,)).fetchone()
+
+        if item is None:
+            flash("Item não encontrado.", "warning")
+            return redirect(url_for("consulta"))
+
+        historico = db.execute(
+            """
+            SELECT * FROM movimentacoes
+            WHERE item_id = ?
+            ORDER BY id DESC
+            LIMIT 30
+            """,
+            (id,),
+        ).fetchall()
+
+        return render_template(
+            "item.html", item=item, historico=historico, acoes=ACOES
+        )
+
+    @app.get("/relatorios")
+    def relatorios():
+        db = get_db()
+        ativos = db.execute(
             "SELECT COUNT(*) FROM inventario WHERE oculto = 0"
         ).fetchone()[0]
-        ocultos = db.execute(
+        removidos = db.execute(
             "SELECT COUNT(*) FROM inventario WHERE oculto = 1"
         ).fetchone()[0]
-        return render_template("home.html", total=total, ocultos=ocultos)
+
+        por_andar = db.execute(
+            """
+            SELECT andar, COUNT(*) AS total
+            FROM inventario
+            WHERE oculto = 0 AND andar <> ''
+            GROUP BY andar
+            ORDER BY total DESC, andar COLLATE NOCASE
+            """
+        ).fetchall()
+        por_alocacao = db.execute(
+            """
+            SELECT alocacao, COUNT(*) AS total
+            FROM inventario
+            WHERE oculto = 0 AND alocacao <> ''
+            GROUP BY alocacao
+            ORDER BY total DESC, alocacao COLLATE NOCASE
+            """
+        ).fetchall()
+
+        sem_andar = db.execute(
+            "SELECT COUNT(*) FROM inventario WHERE oculto = 0 AND andar = ''"
+        ).fetchone()[0]
+        sem_alocacao = db.execute(
+            "SELECT COUNT(*) FROM inventario WHERE oculto = 0 AND alocacao = ''"
+        ).fetchone()[0]
+
+        return render_template(
+            "relatorios.html",
+            ativos=ativos,
+            removidos=removidos,
+            por_andar=por_andar,
+            por_alocacao=por_alocacao,
+            sem_andar=sem_andar,
+            sem_alocacao=sem_alocacao,
+        )
 
     @app.route("/cadastro", methods=["GET", "POST"])
     def cadastro():
@@ -339,13 +510,19 @@ def create_app(test_config: dict | None = None) -> Flask:
                 return render_template("cadastro.html", form=form, campos=CAMPOS), 400
 
             db = get_db()
-            db.execute(
+            cursor = db.execute(
                 """
                 INSERT INTO inventario
                     (patrimonio, nome, serial_number, andar, id_item, alocacao)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 tuple(form[nome] for nome, _ in CAMPOS),
+            )
+            registrar_movimentacao(
+                db,
+                cursor.lastrowid,
+                "cadastro",
+                f"Andar {form['andar']} · {form['alocacao']}",
             )
             db.commit()
 
@@ -554,15 +731,26 @@ def create_app(test_config: dict | None = None) -> Flask:
                 """,
                 (*[form[nome] for nome, _ in CAMPOS], id),
             )
+
+            alterados = [
+                rotulo
+                for nome, rotulo in CAMPOS
+                if str(item[nome] or "") != form[nome]
+            ]
+            registrar_movimentacao(
+                db,
+                id,
+                "edicao",
+                (
+                    "Campos alterados: " + ", ".join(alterados)
+                    if alterados
+                    else "Salvo sem alterações nos campos"
+                ),
+            )
             db.commit()
 
             flash(f'Item "{form["nome"]}" atualizado com sucesso!', "success")
-            return redirect(
-                url_for(
-                    "consulta",
-                    status="removidos" if item["oculto"] else "ativos",
-                )
-            )
+            return redirect(url_for("ficha_item", id=id))
 
         return render_template("editar.html", form=form, campos=CAMPOS, item=item)
 
@@ -577,6 +765,9 @@ def create_app(test_config: dict | None = None) -> Flask:
             flash("Item não encontrado ou já está ativo.", "warning")
         else:
             db.execute("UPDATE inventario SET oculto = 0 WHERE id = ?", (id,))
+            registrar_movimentacao(
+                db, id, "restauracao", "Item devolvido à consulta e à exportação"
+            )
             db.commit()
             flash(f'Item "{item["nome"]}" restaurado no inventário.', "success")
 
@@ -633,6 +824,9 @@ def create_app(test_config: dict | None = None) -> Flask:
             flash("Item não encontrado ou já removido.", "warning")
         else:
             db.execute("UPDATE inventario SET oculto = 1 WHERE id = ?", (id,))
+            registrar_movimentacao(
+                db, id, "remocao", "Item removido da consulta e da exportação"
+            )
             db.commit()
             flash(f'Item "{item["nome"]}" removido do inventário.', "success")
 

@@ -1,0 +1,58 @@
+{% from "_icones.html" import icone %}
+<div class="sidebar-marca">
+    <span class="marca-icone">{{ icone('itens', 20) }}</span>
+    <span class="marca-texto">
+        <strong>Inventário</strong>
+        <small>Gestão patrimonial</small>
+    </span>
+</div>
+
+<nav class="sidebar-nav" aria-label="Menu principal">
+    <p class="sidebar-rotulo">Visão geral</p>
+    <a
+        class="sidebar-link {{ 'is-active' if request.endpoint == 'index' }}"
+        href="{{ url_for('index') }}"
+        {% if request.endpoint == 'index' %}aria-current="page"{% endif %}
+    >
+        {{ icone('painel') }}<span>Painel</span>
+    </a>
+
+    <p class="sidebar-rotulo">Patrimônio</p>
+    <a
+        class="sidebar-link {{ 'is-active' if request.endpoint in ['consulta', 'ficha_item', 'editar'] }}"
+        href="{{ url_for('consulta') }}"
+        {% if request.endpoint in ['consulta', 'ficha_item', 'editar'] %}aria-current="page"{% endif %}
+    >
+        {{ icone('itens') }}<span>Itens</span>
+    </a>
+    <a
+        class="sidebar-link {{ 'is-active' if request.endpoint == 'cadastro' }}"
+        href="{{ url_for('cadastro') }}"
+        {% if request.endpoint == 'cadastro' %}aria-current="page"{% endif %}
+    >
+        {{ icone('novo') }}<span>Novo item</span>
+    </a>
+    <a
+        class="sidebar-link {{ 'is-active' if request.endpoint == 'relatorios' }}"
+        href="{{ url_for('relatorios') }}"
+        {% if request.endpoint == 'relatorios' %}aria-current="page"{% endif %}
+    >
+        {{ icone('relatorios') }}<span>Relatórios</span>
+    </a>
+</nav>
+
+<div class="sidebar-rodape">
+    <div class="sessao-chip">
+        <span class="sessao-ponto" aria-hidden="true"></span>
+        <span class="sessao-texto">
+            <strong>Sessão protegida</strong>
+            <small>Senha única</small>
+        </span>
+    </div>
+    <form method="post" action="{{ url_for('sair') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="sidebar-link sidebar-sair" type="submit">
+            {{ icone('sair') }}<span>Sair</span>
+        </button>
+    </form>
+</div>

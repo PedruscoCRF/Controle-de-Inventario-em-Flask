@@ -1,14 +1,24 @@
 {% extends "base.html" %}
+{% from "_icones.html" import icone %}
 
-{% block title %}Consultar itens | Controle de Inventário{% endblock %}
+{% block title %}Itens | Controle de Inventário{% endblock %}
+{% block secao %}Patrimônio / Itens{% endblock %}
 
 {% macro acoes(item) %}
-    <div class="d-inline-flex flex-wrap gap-1">
-        <a class="btn btn-outline-dark btn-sm" href="{{ url_for('editar', id=item.id) }}">Editar</a>
+    <div class="acoes-linha">
+        <a
+            class="btn btn-sm btn-outline-secondary"
+            href="{{ url_for('editar', id=item.id) }}"
+            aria-label="Editar {{ item.nome }}"
+        >
+            {{ icone('editar', 15) }} Editar
+        </a>
         {% if item.oculto %}
             <form method="post" action="{{ url_for('restaurar', id=item.id) }}">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-outline-success btn-sm" type="submit">Restaurar</button>
+                <button class="btn btn-sm btn-outline-success" type="submit">
+                    {{ icone('restaurar', 15) }} Restaurar
+                </button>
             </form>
         {% else %}
             <form
@@ -17,125 +27,139 @@
                 data-confirmar="Remover o item {{ item.nome }} do inventário? Ele deixará de aparecer na consulta e na exportação."
             >
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-outline-danger btn-sm" type="submit">Remover</button>
+                <button class="btn btn-sm btn-outline-danger" type="submit">
+                    {{ icone('remover', 15) }} Remover
+                </button>
             </form>
         {% endif %}
     </div>
 {% endmacro %}
 
 {% block content %}
-<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+<div class="pagina-topo">
     <div>
-        <h1 class="h3 mb-1">Inventário</h1>
-        <p class="text-body-secondary mb-0">
+        <p class="pagina-sobretitulo">Patrimônio</p>
+        <h1 class="pagina-titulo">Itens</h1>
+        <p class="pagina-descricao">
             {{ contagens.ativos }} item(ns) ativo(s) e {{ contagens.removidos }} removido(s).
         </p>
     </div>
-    <a class="btn btn-success" href="{{ url_for('exportar_excel') }}">Exportar ativos para Excel</a>
-</div>
-
-<ul class="nav nav-pills gap-2 mb-3" aria-label="Situação dos itens">
-    <li class="nav-item">
-        <a
-            class="nav-link {{ 'active' if status == 'ativos' }}"
-            href="{{ url_consulta(status='ativos', pagina=1) }}"
-            {% if status == 'ativos' %}aria-current="page"{% endif %}
-        >
-            Ativos <span class="badge rounded-pill badge-count">{{ contagens.ativos }}</span>
+    <div class="pagina-acoes">
+        <a class="btn btn-outline-secondary" href="{{ url_for('exportar_excel') }}">
+            {{ icone('download', 17) }} Exportar Excel
         </a>
-    </li>
-    <li class="nav-item">
-        <a
-            class="nav-link {{ 'active' if status == 'removidos' }}"
-            href="{{ url_consulta(status='removidos', pagina=1) }}"
-            {% if status == 'removidos' %}aria-current="page"{% endif %}
-        >
-            Removidos <span class="badge rounded-pill badge-count">{{ contagens.removidos }}</span>
+        <a class="btn btn-primary" href="{{ url_for('cadastro') }}">
+            {{ icone('novo', 17) }} Novo item
         </a>
-    </li>
-</ul>
-
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <form class="row g-3" method="get" action="{{ url_for('consulta') }}">
-            <input type="hidden" name="status" value="{{ status }}">
-
-            <div class="col-12">
-                <label class="form-label" for="criterio">Buscar</label>
-                <input
-                    class="form-control"
-                    type="search"
-                    id="criterio"
-                    name="criterio"
-                    value="{{ criterio }}"
-                    placeholder="Patrimônio, nome, serial, andar, ID ou alocação"
-                    autocomplete="off"
-                >
-            </div>
-
-            <div class="col-sm-6 col-lg-3">
-                <label class="form-label" for="filtro-andar">Andar</label>
-                <select class="form-select" id="filtro-andar" name="andar">
-                    <option value="">Todos</option>
-                    {% for valor in andares %}
-                        <option value="{{ valor }}" {{ 'selected' if valor == andar }}>{{ valor }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-sm-6 col-lg-3">
-                <label class="form-label" for="filtro-alocacao">Alocação</label>
-                <select class="form-select" id="filtro-alocacao" name="alocacao">
-                    <option value="">Todas</option>
-                    {% for valor in alocacoes %}
-                        <option value="{{ valor }}" {{ 'selected' if valor == alocacao }}>{{ valor }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-sm-6 col-lg-3">
-                <label class="form-label" for="ordem">Ordenar por</label>
-                <select class="form-select" id="ordem" name="ordem">
-                    {% for chave, dados in opcoes_ordem.items() %}
-                        <option value="{{ chave }}" {{ 'selected' if chave == ordem }}>{{ dados[1] }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-sm-6 col-lg-3">
-                <label class="form-label" for="direcao">Direção</label>
-                <select class="form-select" id="direcao" name="direcao">
-                    <option value="asc" {{ 'selected' if direcao == 'asc' }}>Crescente</option>
-                    <option value="desc" {{ 'selected' if direcao == 'desc' }}>Decrescente</option>
-                </select>
-            </div>
-
-            <div class="col-12 d-flex flex-wrap gap-2">
-                <button class="btn btn-primary" type="submit">Aplicar filtros</button>
-                <a class="btn btn-outline-dark" href="{{ url_for('consulta', status=status) }}">Limpar filtros</a>
-            </div>
-        </form>
     </div>
 </div>
 
-<p class="small text-body-secondary">
+<div class="segmento" role="group" aria-label="Situação dos itens">
+    <a
+        class="segmento-item {{ 'is-active' if status == 'ativos' }}"
+        href="{{ url_consulta(status='ativos', pagina=1) }}"
+        {% if status == 'ativos' %}aria-current="page"{% endif %}
+    >
+        Ativos <span class="segmento-contagem">{{ contagens.ativos }}</span>
+    </a>
+    <a
+        class="segmento-item {{ 'is-active' if status == 'removidos' }}"
+        href="{{ url_consulta(status='removidos', pagina=1) }}"
+        {% if status == 'removidos' %}aria-current="page"{% endif %}
+    >
+        Removidos <span class="segmento-contagem">{{ contagens.removidos }}</span>
+    </a>
+</div>
+
+<form class="filtros card-erp" method="get" action="{{ url_for('consulta') }}">
+    <input type="hidden" name="status" value="{{ status }}">
+
+    <div class="filtros-busca">
+        <label class="form-label" for="criterio">Buscar</label>
+        <div class="campo-com-icone">
+            <span class="campo-icone">{{ icone('busca', 17) }}</span>
+            <input
+                class="form-control"
+                type="search"
+                id="criterio"
+                name="criterio"
+                value="{{ criterio }}"
+                placeholder="Patrimônio, nome, serial, andar..."
+                autocomplete="off"
+            >
+        </div>
+    </div>
+
+    <div class="filtros-campo">
+        <label class="form-label" for="filtro-andar">Andar</label>
+        <select class="form-select" id="filtro-andar" name="andar">
+            <option value="">Todos</option>
+            {% for valor in andares %}
+                <option value="{{ valor }}" {{ 'selected' if valor == andar }}>{{ valor }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filtros-campo">
+        <label class="form-label" for="filtro-alocacao">Alocação</label>
+        <select class="form-select" id="filtro-alocacao" name="alocacao">
+            <option value="">Todas</option>
+            {% for valor in alocacoes %}
+                <option value="{{ valor }}" {{ 'selected' if valor == alocacao }}>{{ valor }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filtros-campo">
+        <label class="form-label" for="ordem">Ordenar por</label>
+        <select class="form-select" id="ordem" name="ordem">
+            {% for chave, dados in opcoes_ordem.items() %}
+                <option value="{{ chave }}" {{ 'selected' if chave == ordem }}>{{ dados[1] }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filtros-campo filtros-campo-curto">
+        <label class="form-label" for="direcao">Direção</label>
+        <select class="form-select" id="direcao" name="direcao">
+            <option value="asc" {{ 'selected' if direcao == 'asc' }}>Crescente</option>
+            <option value="desc" {{ 'selected' if direcao == 'desc' }}>Decrescente</option>
+        </select>
+    </div>
+
+    <div class="filtros-acoes">
+        <button class="btn btn-primary" type="submit">
+            {{ icone('filtro', 16) }} Aplicar
+        </button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('consulta', status=status) }}">Limpar</a>
+    </div>
+</form>
+
+<div class="resultado-barra">
+    <p class="resultado-texto">
+        {% if total %}
+            Mostrando {{ inicio_registro }}–{{ fim_registro }} de {{ total }} item(ns)
+        {% else %}
+            Nenhum item
+        {% endif %}
+        {% if criterio %}para “{{ criterio }}”{% endif %}
+        {% if andar %}<span class="chip-filtro">Andar {{ andar }}</span>{% endif %}
+        {% if alocacao %}<span class="chip-filtro">{{ alocacao }}</span>{% endif %}
+    </p>
     {% if total %}
-        Mostrando {{ inicio_registro }}–{{ fim_registro }} de {{ total }} item(ns)
-    {% else %}
-        Nenhum item
+        <span class="resultado-pagina">Página {{ pagina }} de {{ total_paginas }}</span>
     {% endif %}
-    {% if criterio %}para “{{ criterio }}”{% endif %}
-</p>
+</div>
 
 {% if inventario %}
-    <div class="card table-card shadow-sm d-none d-lg-block">
+    <div class="card-erp tabela-wrapper d-none d-lg-block">
         <div
             class="table-responsive"
             role="region"
             aria-label="Tabela de itens do inventário"
             tabindex="0"
         >
-            <table class="table align-middle mb-0">
+            <table class="table tabela-erp tabela-fixa mb-0">
                 <caption class="visually-hidden">Itens do inventário</caption>
                 <thead>
                     <tr>
@@ -150,7 +174,7 @@
                         {% for chave, rotulo in colunas %}
                             <th scope="col">
                                 <a
-                                    class="{{ 'is-sorted' if ordem == chave }}"
+                                    class="ordenar {{ 'is-sorted' if ordem == chave }}"
                                     href="{{ url_consulta(ordem=chave, direcao=('desc' if ordem == chave and direcao == 'asc' else 'asc'), pagina=1) }}"
                                 >
                                     {{ rotulo }}
@@ -169,16 +193,18 @@
                 <tbody>
                     {% for item in inventario %}
                         <tr>
-                            <td class="fw-semibold">{{ item.patrimonio }}</td>
+                            <td class="texto-mono">{{ item.patrimonio }}</td>
                             <td>
-                                {{ item.nome }}
+                                <a class="link-forte" href="{{ url_for('ficha_item', id=item.id) }}">
+                                    {{ item.nome }}
+                                </a>
                                 {% if item.oculto %}
-                                    <span class="badge text-bg-secondary ms-1">Removido</span>
+                                    <span class="selo selo-cinza ms-1">Removido</span>
                                 {% endif %}
                             </td>
-                            <td>{{ item.serial_number }}</td>
+                            <td class="texto-secundario">{{ item.serial_number }}</td>
                             <td>{{ item.andar }}</td>
-                            <td>{{ item.id_item }}</td>
+                            <td class="texto-secundario">{{ item.id_item }}</td>
                             <td>{{ item.alocacao }}</td>
                             <td class="text-end">{{ acoes(item) }}</td>
                         </tr>
@@ -190,80 +216,96 @@
 
     <div class="d-lg-none">
         {% for item in inventario %}
-            <article class="card item-card shadow-sm mb-3">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-2">
-                        <h2 class="h5 mb-1">{{ item.nome }}</h2>
-                        {% if item.oculto %}
-                            <span class="badge text-bg-secondary">Removido</span>
-                        {% endif %}
+            <article class="card-erp item-card mb-3">
+                <div class="item-card-topo">
+                    <div>
+                        <a class="link-forte item-card-nome" href="{{ url_for('ficha_item', id=item.id) }}">
+                            {{ item.nome }}
+                        </a>
+                        <p class="item-card-patrimonio">Patrimônio {{ item.patrimonio }}</p>
                     </div>
-                    <p class="text-body-secondary mb-3">Patrimônio {{ item.patrimonio }}</p>
-
-                    <dl class="row g-1 small">
-                        <dt class="col-4">Serial</dt>
-                        <dd class="col-8 mb-0">{{ item.serial_number }}</dd>
-                        <dt class="col-4">Andar</dt>
-                        <dd class="col-8 mb-0">{{ item.andar }}</dd>
-                        <dt class="col-4">ID do item</dt>
-                        <dd class="col-8 mb-0">{{ item.id_item }}</dd>
-                        <dt class="col-4">Alocação</dt>
-                        <dd class="col-8 mb-0">{{ item.alocacao }}</dd>
-                    </dl>
-
-                    <div class="mt-3">{{ acoes(item) }}</div>
+                    {% if item.oculto %}
+                        <span class="selo selo-cinza">Removido</span>
+                    {% endif %}
                 </div>
+
+                <dl class="item-card-dados">
+                    <div>
+                        <dt>Serial</dt>
+                        <dd>{{ item.serial_number }}</dd>
+                    </div>
+                    <div>
+                        <dt>Andar</dt>
+                        <dd>{{ item.andar }}</dd>
+                    </div>
+                    <div>
+                        <dt>ID do item</dt>
+                        <dd>{{ item.id_item }}</dd>
+                    </div>
+                    <div>
+                        <dt>Alocação</dt>
+                        <dd>{{ item.alocacao }}</dd>
+                    </div>
+                </dl>
+
+                <div class="item-card-rodape">{{ acoes(item) }}</div>
             </article>
         {% endfor %}
     </div>
 
     {% if total_paginas > 1 %}
-        <nav class="mt-4" aria-label="Paginação dos resultados">
-            <p class="text-center small text-body-secondary mb-2">
-                Página {{ pagina }} de {{ total_paginas }}
-            </p>
-            <ul class="pagination justify-content-center mb-0">
-                <li class="page-item {{ 'disabled' if pagina == 1 }}">
-                    {% if pagina > 1 %}
-                        <a class="page-link" href="{{ url_consulta(pagina=pagina - 1) }}">Anterior</a>
-                    {% else %}
-                        <span class="page-link">Anterior</span>
-                    {% endif %}
-                </li>
+        <nav class="paginacao" aria-label="Paginação dos resultados">
+            <a
+                class="pagina-seta {{ 'is-disabled' if pagina == 1 }}"
+                href="{{ url_consulta(pagina=pagina - 1) if pagina > 1 else '#' }}"
+                {% if pagina == 1 %}aria-disabled="true" tabindex="-1"{% endif %}
+                aria-label="Página anterior"
+            >{{ icone('esquerda', 16) }}</a>
 
-                {% for numero in paginas %}
-                    <li class="page-item {{ 'active' if numero == pagina }}">
-                        <a
-                            class="page-link"
-                            href="{{ url_consulta(pagina=numero) }}"
-                            {% if numero == pagina %}aria-current="page"{% endif %}
-                        >{{ numero }}</a>
-                    </li>
-                {% endfor %}
+            {% for numero in paginas %}
+                <a
+                    class="pagina-numero {{ 'is-active' if numero == pagina }}"
+                    href="{{ url_consulta(pagina=numero) }}"
+                    {% if numero == pagina %}aria-current="page"{% endif %}
+                >{{ numero }}</a>
+            {% endfor %}
 
-                <li class="page-item {{ 'disabled' if pagina == total_paginas }}">
-                    {% if pagina < total_paginas %}
-                        <a class="page-link" href="{{ url_consulta(pagina=pagina + 1) }}">Próxima</a>
-                    {% else %}
-                        <span class="page-link">Próxima</span>
-                    {% endif %}
-                </li>
-            </ul>
+            <a
+                class="pagina-seta {{ 'is-disabled' if pagina == total_paginas }}"
+                href="{{ url_consulta(pagina=pagina + 1) if pagina < total_paginas else '#' }}"
+                {% if pagina == total_paginas %}aria-disabled="true" tabindex="-1"{% endif %}
+                aria-label="Próxima página"
+            >{{ icone('direita', 16) }}</a>
         </nav>
     {% endif %}
 {% else %}
-    <div class="empty-state">
+    <div class="vazio">
+        <span class="vazio-icone">{{ icone('caixa', 26) }}</span>
         {% if status == 'removidos' %}
-            <p class="mb-2">Nenhum item removido.</p>
-            <a href="{{ url_consulta(status='ativos', pagina=1) }}">Ver itens ativos</a>
+            <h2 class="h6 mb-1">Nenhum item removido</h2>
+            <p class="texto-secundario mb-3">
+                Itens removidos ficam aqui e podem voltar para o inventário.
+            </p>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_consulta(status='ativos', pagina=1) }}">
+                Ver itens ativos
+            </a>
         {% else %}
-            <p class="mb-2">Nenhum item encontrado.</p>
+            <h2 class="h6 mb-1">Nenhum item encontrado</h2>
+            <p class="texto-secundario mb-3">
+                {% if criterio or andar or alocacao %}
+                    Ajuste a busca ou os filtros para ver outros resultados.
+                {% else %}
+                    Cadastre o primeiro item para começar o inventário.
+                {% endif %}
+            </p>
             {% if criterio or andar or alocacao %}
-                <a href="{{ url_consulta(status=status, criterio='', andar='', alocacao='', pagina=1) }}">
-                    Limpar a busca e os filtros
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_consulta(status=status, criterio='', andar='', alocacao='', pagina=1) }}">
+                    Limpar busca e filtros
                 </a>
             {% else %}
-                <a href="{{ url_for('cadastro') }}">Cadastre o primeiro item</a>
+                <a class="btn btn-sm btn-primary" href="{{ url_for('cadastro') }}">
+                    {{ icone('novo', 15) }} Cadastrar item
+                </a>
             {% endif %}
         {% endif %}
     </div>

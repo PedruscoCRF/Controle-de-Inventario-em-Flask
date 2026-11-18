@@ -1,20 +1,40 @@
 {% extends "base.html" %}
+{% from "_icones.html" import icone %}
 
-{% block title %}Cadastrar item | Controle de Inventário{% endblock %}
+{% block title %}Novo item | Controle de Inventário{% endblock %}
+{% block secao %}Patrimônio / Novo item{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-8 col-xl-7">
-        <h1 class="h3 mb-1">Cadastrar novo item</h1>
-        <p class="text-body-secondary">Os campos marcados com * são obrigatórios.</p>
+<div class="pagina-topo">
+    <div>
+        <p class="pagina-sobretitulo">Patrimônio</p>
+        <h1 class="pagina-titulo">Novo item</h1>
+        <p class="pagina-descricao">
+            Preencha os dados do bem. Os campos com * são obrigatórios.
+        </p>
+    </div>
+    <div class="pagina-acoes">
+        <a class="btn btn-outline-secondary" href="{{ url_for('consulta') }}">
+            {{ icone('esquerda', 16) }} Voltar
+        </a>
+    </div>
+</div>
 
-        <div class="card shadow-sm">
-            <div class="card-body p-4">
-                {% with acao = url_for('cadastro'), rotulo_botao = 'Cadastrar', cancelar_url = url_for('consulta') %}
+<div class="row">
+    <div class="col-lg-9 col-xl-7">
+        <section class="painel-card" aria-labelledby="titulo-formulario">
+            <div class="painel-card-topo">
+                <h2 class="painel-card-titulo" id="titulo-formulario">
+                    {{ icone('novo', 17) }} Identificação do item
+                </h2>
+            </div>
+
+            <div class="painel-card-corpo">
+                {% with acao = url_for('cadastro'), rotulo_botao = 'Cadastrar item', cancelar_url = url_for('consulta') %}
                     {% include "_form_item.html" %}
                 {% endwith %}
             </div>
-        </div>
+        </section>
     </div>
 </div>
 {% endblock %}

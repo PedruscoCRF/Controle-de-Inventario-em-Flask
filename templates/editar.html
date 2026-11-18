@@ -1,37 +1,60 @@
 {% extends "base.html" %}
+{% from "_icones.html" import icone %}
 
 {% block title %}Editar item | Controle de Inventário{% endblock %}
+{% block secao %}Patrimônio / Edição{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-8 col-xl-7">
-        <h1 class="h3 mb-1">Editar item</h1>
-        <p class="text-body-secondary mb-4">
-            {{ item.nome }}
-            &middot; Patrimônio {{ item.patrimonio }}
+<div class="pagina-topo">
+    <div>
+        <p class="pagina-sobretitulo">Patrimônio {{ item.patrimonio }}</p>
+        <div class="pagina-titulo-linha">
+            <h1 class="pagina-titulo">Editar item</h1>
             {% if item.oculto %}
-                <span class="badge text-bg-secondary ms-1">Removido</span>
+                <span class="selo selo-cinza">Removido</span>
             {% else %}
-                <span class="badge text-bg-success ms-1">Ativo</span>
+                <span class="selo selo-verde">Ativo</span>
             {% endif %}
-        </p>
+        </div>
+        <p class="pagina-descricao">{{ item.nome }}</p>
+    </div>
+    <div class="pagina-acoes">
+        <a class="btn btn-outline-secondary" href="{{ url_for('ficha_item', id=item.id) }}">
+            {{ icone('esquerda', 16) }} Ver ficha
+        </a>
+    </div>
+</div>
 
-        <div class="card shadow-sm">
-            <div class="card-body p-4">
-                {% with acao = url_for('editar', id=item.id), rotulo_botao = 'Salvar alterações', cancelar_url = url_for('consulta') %}
+<div class="row">
+    <div class="col-lg-9 col-xl-7">
+        <section class="painel-card" aria-labelledby="titulo-formulario">
+            <div class="painel-card-topo">
+                <h2 class="painel-card-titulo" id="titulo-formulario">
+                    {{ icone('editar', 17) }} Dados do item
+                </h2>
+            </div>
+
+            <div class="painel-card-corpo">
+                {% with acao = url_for('editar', id=item.id), rotulo_botao = 'Salvar alterações', cancelar_url = url_for('ficha_item', id=item.id) %}
                     {% include "_form_item.html" %}
                 {% endwith %}
             </div>
 
-            <div class="card-footer bg-transparent d-flex flex-wrap justify-content-between align-items-center gap-2 px-4 py-3">
-                <span class="small text-body-secondary">
-                    {{ 'Este item está removido da consulta e da exportação.' if item.oculto else 'Este item está ativo no inventário.' }}
+            <div class="painel-card-rodape">
+                <span class="texto-secundario small">
+                    {% if item.oculto %}
+                        Este item está removido da consulta e da exportação.
+                    {% else %}
+                        Este item está ativo no inventário.
+                    {% endif %}
                 </span>
 
                 {% if item.oculto %}
                     <form method="post" action="{{ url_for('restaurar', id=item.id) }}">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                        <button class="btn btn-outline-success btn-sm" type="submit">Restaurar no inventário</button>
+                        <button class="btn btn-outline-success btn-sm" type="submit">
+                            {{ icone('restaurar', 15) }} Restaurar
+                        </button>
                     </form>
                 {% else %}
                     <form
@@ -40,11 +63,13 @@
                         data-confirmar="Remover o item {{ item.nome }} do inventário? Ele deixará de aparecer na consulta e na exportação."
                     >
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                        <button class="btn btn-outline-danger btn-sm" type="submit">Remover do inventário</button>
+                        <button class="btn btn-outline-danger btn-sm" type="submit">
+                            {{ icone('remover', 15) }} Remover
+                        </button>
                     </form>
                 {% endif %}
             </div>
-        </div>
+        </section>
     </div>
 </div>
 {% endblock %}

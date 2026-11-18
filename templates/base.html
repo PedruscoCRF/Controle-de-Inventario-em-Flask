@@ -1,3 +1,4 @@
+{% from "_icones.html" import icone %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -6,7 +7,7 @@
     <title>{% block title %}Controle de Inventário{% endblock %}</title>
     <link
         rel="icon"
-        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23102a43'/%3E%3Cpath d='M8 12h16v12H8zM8 12l3-5h10l3 5' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f2233'/%3E%3Cpath d='M8 12h16v12H8zM8 12l3-5h10l3 5' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E"
     >
     <link
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
@@ -17,99 +18,89 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
     {% block head %}{% endblock %}
 </head>
-<body class="d-flex flex-column min-vh-100">
+<body class="{{ '' if autenticado else 'modo-acesso' }}">
 
     <a class="visually-hidden-focusable skip-link" href="#conteudo">
         Ir para o conteúdo
     </a>
 
-    <header>
-        <nav class="navbar navbar-expand-lg navbar-dark" aria-label="Navegação principal">
-            <div class="container">
-                <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
-                    <svg
-                        width="22" height="22" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"
-                        aria-hidden="true"
+    <div class="app-shell {{ '' if autenticado else 'app-shell-acesso' }}">
+        {% if autenticado %}
+            <aside class="app-sidebar d-none d-lg-flex">
+                {% include "_sidebar.html" %}
+            </aside>
+        {% endif %}
+
+        <div class="app-body">
+            {% if autenticado %}
+                <header class="app-topbar">
+                    <button
+                        class="btn-topbar d-lg-none"
+                        type="button"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#menu-mobile"
+                        aria-controls="menu-mobile"
+                        aria-label="Abrir menu"
                     >
-                        <path d="M3 7h18v13H3z"/>
-                        <path d="M3 7l2-4h14l2 4"/>
-                        <path d="M9 11h6"/>
-                    </svg>
-                    <span>Controle de Inventário</span>
-                </a>
+                        {{ icone('menu', 20) }}
+                    </button>
 
-                <button
-                    class="navbar-toggler"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#menu"
-                    aria-controls="menu"
-                    aria-expanded="false"
-                    aria-label="Abrir menu"
-                >
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-
-                <div class="collapse navbar-collapse" id="menu">
-                    <ul class="navbar-nav ms-auto align-items-lg-center">
-                        {% if autenticado %}
-                            <li class="nav-item">
-                                <a class="nav-link {{ 'active' if request.endpoint == 'index' }}"
-                                   {% if request.endpoint == 'index' %}aria-current="page"{% endif %}
-                                   href="{{ url_for('index') }}">Início</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {{ 'active' if request.endpoint == 'cadastro' }}"
-                                   {% if request.endpoint == 'cadastro' %}aria-current="page"{% endif %}
-                                   href="{{ url_for('cadastro') }}">Cadastrar</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {{ 'active' if request.endpoint in ['consulta', 'editar'] }}"
-                                   {% if request.endpoint == 'consulta' %}aria-current="page"{% endif %}
-                                   href="{{ url_for('consulta') }}">Consultar</a>
-                            </li>
-                            <li class="nav-item ms-lg-2">
-                                <form method="post" action="{{ url_for('sair') }}">
-                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                                    <button class="nav-link btn btn-link w-100 text-lg-start" type="submit">Sair</button>
-                                </form>
-                            </li>
-                        {% else %}
-                            <li class="nav-item">
-                                <a class="nav-link {{ 'active' if request.endpoint == 'login' }}"
-                                   href="{{ url_for('login') }}">Entrar</a>
-                            </li>
-                        {% endif %}
-                    </ul>
-                </div>
-            </div>
-        </nav>
-    </header>
-
-    <main id="conteudo" class="container py-4 flex-grow-1" tabindex="-1">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for categoria, mensagem in messages %}
-                    <div
-                        class="alert alert-{{ categoria if categoria in ['success', 'danger', 'warning', 'info'] else 'info' }} alert-dismissible fade show"
-                        role="alert"
-                    >
-                        {{ mensagem }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                    <div class="topbar-trilha">
+                        <span class="topbar-marca d-lg-none">Inventário</span>
+                        <span class="topbar-secao">{% block secao %}Painel{% endblock %}</span>
                     </div>
-                {% endfor %}
+
+                    <div class="topbar-acoes">
+                        <span class="topbar-data">{{ hoje }}</span>
+                        <form method="post" action="{{ url_for('sair') }}" class="d-none d-lg-block">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn-topbar-sair" type="submit">
+                                {{ icone('sair', 16) }}<span>Sair</span>
+                            </button>
+                        </form>
+                    </div>
+                </header>
+            {% else %}
+                <header class="acesso-topo">
+                    <span class="marca-icone">{{ icone('itens', 20) }}</span>
+                    <span class="marca-texto">
+                        <strong>Inventário</strong>
+                        <small>Gestão patrimonial</small>
+                    </span>
+                </header>
             {% endif %}
-        {% endwith %}
 
-        {% block content %}{% endblock %}
-    </main>
+            <main
+                id="conteudo"
+                class="app-conteudo {{ '' if autenticado else 'acesso-conteudo' }}"
+                tabindex="-1"
+            >
+                {% include "_flashes.html" %}
+                {% block content %}{% endblock %}
+            </main>
 
-    <footer class="mt-auto py-3">
-        <div class="container text-center small text-body-secondary">
-            Controle de Inventário &middot; {{ current_year }}
+            <footer class="app-rodape">
+                <span>Controle de Inventário &middot; {{ current_year }}</span>
+                <span class="app-rodape-info">
+                    {{ 'SQLite local · uso interno' if autenticado else 'Acesso protegido' }}
+                </span>
+            </footer>
         </div>
-    </footer>
+    </div>
+
+    {% if autenticado %}
+        <div
+            class="offcanvas offcanvas-start sidebar-offcanvas"
+            tabindex="-1"
+            id="menu-mobile"
+            aria-labelledby="menu-mobile-titulo"
+        >
+            <h2 class="visually-hidden" id="menu-mobile-titulo">Menu principal</h2>
+            <div class="offcanvas-body d-flex flex-column p-0">
+                {% include "_sidebar.html" %}
+            </div>
+        </div>
+    {% endif %}
 
     <script
         src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"

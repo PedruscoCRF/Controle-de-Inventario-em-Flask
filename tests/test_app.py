@@ -323,6 +323,86 @@ def test_ordenacao_decrescente_por_nome(client):
     assert texto.index("Zulu") < texto.index("Alpha")
 
 
+def test_painel_mostra_indicadores_e_movimentacoes(client):
+    cadastrar(client)
+    texto = client.get("/").get_data(as_text=True)
+
+    assert "Itens ativos" in texto
+    assert "Itens por andar" in texto
+    assert "Itens por alocação" in texto
+    assert "Movimentações recentes" in texto
+    assert "Cadastro" in texto
+    assert "Notebook Dell" in texto
+
+
+def test_ficha_do_item_mostra_dados_e_historico(client, app):
+    cadastrar(client)
+    item_id = id_por_nome(app, "Notebook Dell")
+
+    texto = client.get(f"/itens/{item_id}").get_data(as_text=True)
+
+    assert "Notebook Dell" in texto
+    assert "SN-ABC123" in texto
+    assert "ITEM-01" in texto
+    assert "Dados do item" in texto
+    assert "Histórico" in texto
+    assert "Cadastro" in texto
+    assert "Andar 2" in texto
+
+
+def test_historico_registra_edicao_remocao_e_restauracao(client, app):
+    cadastrar(client)
+    item_id = id_por_nome(app, "Notebook Dell")
+
+    client.post(f"/editar/{item_id}", data={**DADOS, "nome": "Notebook novo"})
+    client.post(f"/remover/{item_id}")
+    client.post(f"/restaurar/{item_id}")
+
+    texto = client.get(f"/itens/{item_id}").get_data(as_text=True)
+    assert "Edição" in texto
+    assert "Remoção" in texto
+    assert "Restauração" in texto
+    assert "Campos alterados: Nome" in texto
+
+    with sqlite3.connect(app.config["DATABASE"]) as conexao:
+        acoes = [
+            linha[0]
+            for linha in conexao.execute(
+                "SELECT acao FROM movimentacoes WHERE item_id = ? ORDER BY id",
+                (item_id,),
+            )
+        ]
+    assert acoes == ["cadastro", "edicao", "remocao", "restauracao"]
+
+
+def test_relatorios_mostram_distribuicao(client):
+    cadastrar(client)
+    cadastrar(
+        client,
+        patrimonio="PAT-002",
+        nome="Projetor Epson",
+        serial_number="SN-2",
+        alocacao="Salão",
+    )
+
+    texto = client.get("/relatorios").get_data(as_text=True)
+
+    assert "Relatórios" in texto
+    assert "Itens por andar" in texto
+    assert "Itens por alocação" in texto
+    assert "Secretaria" in texto
+    assert "Salão" in texto
+    assert "50%" in texto
+
+
+def test_ficha_de_item_inexistente_volta_para_a_lista(client):
+    resposta = client.get("/itens/9999", follow_redirects=True)
+    texto = resposta.get_data(as_text=True)
+
+    assert "Item não encontrado" in texto
+    assert "Itens" in texto
+
+
 def token_csrf(cliente, caminho="/login"):
     pagina = cliente.get(caminho).get_data(as_text=True)
     return re.search(r'name="_csrf_token" value="([^"]+)"', pagina).group(1)
@@ -344,7 +424,8 @@ def test_login_com_senha_correta(anon):
     texto = resposta.get_data(as_text=True)
 
     assert resposta.status_code == 200
-    assert "Bem-vindo ao Controle de Inventário" in texto
+    assert "Painel" in texto
+    assert "Movimentações recentes" in texto
     assert "Sair" in texto
 
 
