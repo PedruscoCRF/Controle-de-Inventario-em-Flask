@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Entrar | Controle de Inventário{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-sm-9 col-md-7 col-lg-5 col-xl-4">
+        <div class="card shadow-sm mt-3 mt-lg-5">
+            <div class="card-body p-4 p-md-5">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <svg
+                        width="26" height="26" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"
+                        aria-hidden="true" class="text-body-secondary"
+                    >
+                        <rect x="4" y="10" width="16" height="10" rx="2"/>
+                        <path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+                    </svg>
+                    <h1 class="h4 mb-0">Acesso restrito</h1>
+                </div>
+                <p class="text-body-secondary">
+                    Informe a senha para consultar e alterar o inventário.
+                </p>
+
+                <form method="post" action="{{ url_for('login') }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="proximo" value="{{ proximo }}">
+
+                    <label class="form-label" for="senha">Senha</label>
+                    <input
+                        class="form-control form-control-lg"
+                        type="password"
+                        id="senha"
+                        name="senha"
+                        autocomplete="current-password"
+                        required
+                        autofocus
+                    >
+
+                    <button class="btn btn-primary w-100 mt-4" type="submit">Entrar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

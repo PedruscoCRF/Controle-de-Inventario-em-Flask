@@ -9,12 +9,14 @@ um ``inventario.db`` antigo na raiz do projeto, ele é copiado para lá.
 
 from __future__ import annotations
 
+import hmac
 import io
 import os
 import secrets
 import shutil
 import sqlite3
-from datetime import date
+import time
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -27,6 +29,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    session,
     url_for,
 )
 from openpyxl.utils import get_column_letter
@@ -84,6 +87,21 @@ def _local_secret_key(app: Flask) -> str:
     return chave
 
 
+def _local_password(app: Flask) -> str:
+    """Senha de acesso: ambiente em produção, arquivo local no desenvolvimento."""
+    arquivo = Path(app.instance_path) / "senha"
+    if arquivo.exists():
+        return arquivo.read_text(encoding="utf-8").strip()
+
+    senha = secrets.token_urlsafe(9)
+    arquivo.write_text(senha, encoding="utf-8")
+    print(
+        f"Senha de acesso criada em {arquivo}. "
+        "Defina INVENTARIO_SENHA para escolher outra."
+    )
+    return senha
+
+
 def _preparar_banco(app: Flask) -> None:
     """Cria a pasta e a tabela; migra o banco antigo na primeira execução."""
     caminho = Path(app.config["DATABASE"])
@@ -128,6 +146,15 @@ def create_app(test_config: dict | None = None) -> Flask:
         MIGRATE_LEGACY_DB=True,
         SECRET_KEY=None,
         MAX_CONTENT_LENGTH=1 * 1024 * 1024,
+        # Acesso
+        SENHA=os.environ.get("INVENTARIO_SENHA"),
+        CSRF_ENABLED=True,
+        TENTATIVAS_LOGIN=5,
+        BLOQUEIO_LOGIN=60,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=os.environ.get("INVENTARIO_COOKIE_SECURE") == "1",
+        PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
     )
     if test_config:
         app.config.update(test_config)
@@ -135,6 +162,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.config["DATABASE"] = str(Path(app.config["DATABASE"]).expanduser().resolve())
     if not app.config["SECRET_KEY"]:
         app.config["SECRET_KEY"] = _local_secret_key(app)
+    if not app.config["SENHA"]:
+        app.config["SENHA"] = _local_password(app)
 
     _preparar_banco(app)
 
@@ -155,11 +184,132 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.context_processor
     def variaveis_globais() -> dict:
-        return {"current_year": date.today().year}
+        return {
+            "current_year": date.today().year,
+            "autenticado": bool(session.get("autenticado")),
+        }
+
+    # ------------------------------------------------------------------
+    # Acesso e segurança
+    # ------------------------------------------------------------------
+    def csrf_token() -> str:
+        token = session.get("_csrf_token")
+        if not token:
+            token = secrets.token_urlsafe(32)
+            session["_csrf_token"] = token
+        return token
+
+    app.jinja_env.globals["csrf_token"] = csrf_token
+
+    def destino_seguro(destino: str | None) -> str:
+        """Aceita apenas caminhos internos, para evitar redirecionamento aberto."""
+        if (
+            not destino
+            or not destino.startswith("/")
+            or destino.startswith("//")
+            or "\\" in destino
+        ):
+            return url_for("index")
+        return destino
+
+    @app.before_request
+    def exigir_acesso():
+        if request.method == "POST" and app.config["CSRF_ENABLED"]:
+            enviado = request.form.get("_csrf_token", "")
+            esperado = session.get("_csrf_token", "")
+            if not esperado or not hmac.compare_digest(enviado, esperado):
+                return (
+                    render_template(
+                        "erro.html",
+                        titulo="Sessão expirada",
+                        mensagem=(
+                            "O formulário ficou aberto por muito tempo ou a sessão "
+                            "mudou. Volte e envie novamente."
+                        ),
+                    ),
+                    400,
+                )
+
+        if request.endpoint in (None, "static", "login"):
+            return None
+
+        if not session.get("autenticado"):
+            destino = request.full_path.rstrip("?")
+            return redirect(url_for("login", proximo=destino))
+
+        return None
+
+    @app.after_request
+    def cabecalhos_de_seguranca(resposta):
+        resposta.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resposta.headers.setdefault("X-Frame-Options", "DENY")
+        resposta.headers.setdefault("Referrer-Policy", "same-origin")
+        resposta.headers.setdefault(
+            "Permissions-Policy", "geolocation=(), microphone=(), camera=()"
+        )
+        resposta.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "img-src 'self' data:; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "font-src 'self' data:; "
+            "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        )
+        if session.get("autenticado") and resposta.mimetype == "text/html":
+            resposta.headers["Cache-Control"] = "no-store"
+        return resposta
 
     # ------------------------------------------------------------------
     # Rotas
     # ------------------------------------------------------------------
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if session.get("autenticado"):
+            return redirect(url_for("index"))
+
+        destino = destino_seguro(
+            request.form.get("proximo") or request.args.get("proximo")
+        )
+
+        if request.method == "POST":
+            agora = time.monotonic()
+            bloqueado_ate = session.get("bloqueado_ate", 0)
+            if agora < bloqueado_ate:
+                restante = int(bloqueado_ate - agora) + 1
+                flash(
+                    f"Muitas tentativas. Tente novamente em {restante} segundo(s).",
+                    "warning",
+                )
+                return render_template("login.html", proximo=destino), 429
+
+            senha = request.form.get("senha", "")
+            if hmac.compare_digest(
+                senha.encode("utf-8"), app.config["SENHA"].encode("utf-8")
+            ):
+                session.clear()
+                session["autenticado"] = True
+                session.permanent = True
+                return redirect(destino)
+
+            tentativas = session.get("tentativas", 0) + 1
+            if tentativas >= app.config["TENTATIVAS_LOGIN"]:
+                session["tentativas"] = 0
+                session["bloqueado_ate"] = agora + app.config["BLOQUEIO_LOGIN"]
+            else:
+                session["tentativas"] = tentativas
+
+            flash("Senha incorreta. Tente novamente.", "danger")
+            return render_template("login.html", proximo=destino), 401
+
+        return render_template("login.html", proximo=destino)
+
+    @app.post("/sair")
+    def sair():
+        session.clear()
+        flash("Você saiu do sistema.", "info")
+        return redirect(url_for("login"))
+
     @app.get("/")
     def index():
         db = get_db()

@@ -7,6 +7,7 @@
         <a class="btn btn-outline-dark btn-sm" href="{{ url_for('editar', id=item.id) }}">Editar</a>
         {% if item.oculto %}
             <form method="post" action="{{ url_for('restaurar', id=item.id) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-outline-success btn-sm" type="submit">Restaurar</button>
             </form>
         {% else %}
@@ -15,6 +16,7 @@
                 action="{{ url_for('remover', id=item.id) }}"
                 data-confirmar="Remover o item {{ item.nome }} do inventário? Ele deixará de aparecer na consulta e na exportação."
             >
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-outline-danger btn-sm" type="submit">Remover</button>
             </form>
         {% endif %}

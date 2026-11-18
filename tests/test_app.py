@@ -1,4 +1,5 @@
 import io
+import re
 import sqlite3
 
 import pytest
@@ -15,22 +16,45 @@ DADOS = {
     "alocacao": "Secretaria",
 }
 
+SENHA_TESTE = "senha-de-teste"
 
-@pytest.fixture()
-def app(tmp_path):
+
+def criar_app(tmp_path, **config):
     return create_app(
         {
             "TESTING": True,
             "SECRET_KEY": "chave-de-teste",
             "DATABASE": str(tmp_path / "teste.db"),
             "MIGRATE_LEGACY_DB": False,
+            "SENHA": SENHA_TESTE,
+            "CSRF_ENABLED": False,
+            **config,
         }
     )
 
 
 @pytest.fixture()
-def client(app):
+def app(tmp_path):
+    return criar_app(tmp_path)
+
+
+@pytest.fixture()
+def app_csrf(tmp_path):
+    return criar_app(tmp_path, CSRF_ENABLED=True)
+
+
+@pytest.fixture()
+def anon(app):
     return app.test_client()
+
+
+@pytest.fixture()
+def client(app):
+    """Cliente já autenticado, para os testes das telas internas."""
+    cliente = app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["autenticado"] = True
+    return cliente
 
 
 def cadastrar(client, **alteracoes):
@@ -297,3 +321,120 @@ def test_ordenacao_decrescente_por_nome(client):
 
     texto = client.get("/consulta?ordem=nome&direcao=desc").get_data(as_text=True)
     assert texto.index("Zulu") < texto.index("Alpha")
+
+
+def token_csrf(cliente, caminho="/login"):
+    pagina = cliente.get(caminho).get_data(as_text=True)
+    return re.search(r'name="_csrf_token" value="([^"]+)"', pagina).group(1)
+
+
+def test_area_restrita_exige_login(anon):
+    for caminho in ("/", "/consulta", "/cadastro", "/exportar_excel"):
+        resposta = anon.get(caminho)
+        assert resposta.status_code == 302
+        assert "/login" in resposta.headers["Location"]
+
+    assert anon.get("/login").status_code == 200
+
+
+def test_login_com_senha_correta(anon):
+    resposta = anon.post(
+        "/login", data={"senha": SENHA_TESTE}, follow_redirects=True
+    )
+    texto = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 200
+    assert "Bem-vindo ao Controle de Inventário" in texto
+    assert "Sair" in texto
+
+
+def test_login_recusa_senha_errada(anon):
+    resposta = anon.post("/login", data={"senha": "senha-errada"})
+    texto = resposta.get_data(as_text=True)
+
+    assert resposta.status_code == 401
+    assert "Senha incorreta" in texto
+    assert anon.get("/consulta").status_code == 302
+
+
+def test_login_volta_para_a_pagina_pedida(anon):
+    resposta = anon.post(
+        "/login",
+        data={"senha": SENHA_TESTE, "proximo": "/consulta?status=removidos"},
+    )
+    assert resposta.status_code == 302
+    assert resposta.headers["Location"].endswith("/consulta?status=removidos")
+
+
+def test_login_ignora_destino_externo(anon):
+    resposta = anon.post(
+        "/login",
+        data={"senha": SENHA_TESTE, "proximo": "https://exemplo.com/golpe"},
+    )
+    assert resposta.headers["Location"] == "/"
+
+
+def test_bloqueio_apos_tentativas_seguidas(anon, app):
+    for _ in range(app.config["TENTATIVAS_LOGIN"]):
+        anon.post("/login", data={"senha": "senha-errada"})
+
+    resposta = anon.post("/login", data={"senha": SENHA_TESTE})
+    assert resposta.status_code == 429
+    assert "Muitas tentativas" in resposta.get_data(as_text=True)
+
+
+def test_sair_encerra_a_sessao(client):
+    resposta = client.post("/sair", follow_redirects=True)
+    assert "Você saiu do sistema" in resposta.get_data(as_text=True)
+    assert client.get("/consulta").status_code == 302
+
+
+def test_post_sem_token_csrf_e_recusado(app_csrf):
+    cliente = app_csrf.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["autenticado"] = True
+
+    resposta = cliente.post("/cadastro", data=DADOS)
+    assert resposta.status_code == 400
+    assert "Sessão expirada" in resposta.get_data(as_text=True)
+
+    with sqlite3.connect(app_csrf.config["DATABASE"]) as conexao:
+        total = conexao.execute("SELECT COUNT(*) FROM inventario").fetchone()[0]
+    assert total == 0
+
+
+def test_post_com_token_csrf_funciona(app_csrf):
+    cliente = app_csrf.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["autenticado"] = True
+
+    token = token_csrf(cliente, "/cadastro")
+    resposta = cliente.post(
+        "/cadastro",
+        data={**DADOS, "_csrf_token": token},
+        follow_redirects=True,
+    )
+
+    assert resposta.status_code == 200
+    assert "cadastrado com sucesso" in resposta.get_data(as_text=True)
+
+
+def test_login_exige_token_csrf(app_csrf):
+    cliente = app_csrf.test_client()
+    resposta = cliente.post("/login", data={"senha": SENHA_TESTE})
+    assert resposta.status_code == 400
+
+    token = token_csrf(cliente)
+    resposta = cliente.post(
+        "/login", data={"senha": SENHA_TESTE, "_csrf_token": token}
+    )
+    assert resposta.status_code == 302
+
+
+def test_cabecalhos_de_seguranca(client):
+    resposta = client.get("/")
+
+    assert resposta.headers["X-Content-Type-Options"] == "nosniff"
+    assert resposta.headers["X-Frame-Options"] == "DENY"
+    assert "frame-ancestors 'none'" in resposta.headers["Content-Security-Policy"]
+    assert resposta.headers["Cache-Control"] == "no-store"

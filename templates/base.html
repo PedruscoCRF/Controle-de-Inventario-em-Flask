@@ -52,22 +52,35 @@
                 </button>
 
                 <div class="collapse navbar-collapse" id="menu">
-                    <ul class="navbar-nav ms-auto">
-                        <li class="nav-item">
-                            <a class="nav-link {{ 'active' if request.endpoint == 'index' }}"
-                               {% if request.endpoint == 'index' %}aria-current="page"{% endif %}
-                               href="{{ url_for('index') }}">Início</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {{ 'active' if request.endpoint == 'cadastro' }}"
-                               {% if request.endpoint == 'cadastro' %}aria-current="page"{% endif %}
-                               href="{{ url_for('cadastro') }}">Cadastrar</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {{ 'active' if request.endpoint in ['consulta', 'editar'] }}"
-                               {% if request.endpoint == 'consulta' %}aria-current="page"{% endif %}
-                               href="{{ url_for('consulta') }}">Consultar</a>
-                        </li>
+                    <ul class="navbar-nav ms-auto align-items-lg-center">
+                        {% if autenticado %}
+                            <li class="nav-item">
+                                <a class="nav-link {{ 'active' if request.endpoint == 'index' }}"
+                                   {% if request.endpoint == 'index' %}aria-current="page"{% endif %}
+                                   href="{{ url_for('index') }}">Início</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {{ 'active' if request.endpoint == 'cadastro' }}"
+                                   {% if request.endpoint == 'cadastro' %}aria-current="page"{% endif %}
+                                   href="{{ url_for('cadastro') }}">Cadastrar</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {{ 'active' if request.endpoint in ['consulta', 'editar'] }}"
+                                   {% if request.endpoint == 'consulta' %}aria-current="page"{% endif %}
+                                   href="{{ url_for('consulta') }}">Consultar</a>
+                            </li>
+                            <li class="nav-item ms-lg-2">
+                                <form method="post" action="{{ url_for('sair') }}">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                    <button class="nav-link btn btn-link w-100 text-lg-start" type="submit">Sair</button>
+                                </form>
+                            </li>
+                        {% else %}
+                            <li class="nav-item">
+                                <a class="nav-link {{ 'active' if request.endpoint == 'login' }}"
+                                   href="{{ url_for('login') }}">Entrar</a>
+                            </li>
+                        {% endif %}
                     </ul>
                 </div>
             </div>
